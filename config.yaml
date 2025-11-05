@@ -1,0 +1,38 @@
+# Rohimaya Audiobook Generator Configuration
+
+# TTS Providers
+providers:
+  inworld:
+    enabled: true
+    priority: 1
+    rate_limit: 60
+    
+  openai:
+    enabled: true
+    priority: 2
+    rate_limit: 500
+
+# Processing
+processing:
+  chunk_size: 1500
+  max_workers: 5
+  parallel_enabled: true
+
+# Output
+output:
+  format: mp3
+  sample_rate: 44100
+  bitrate: 192
+  channels: 2
+  normalize_audio: true
+
+# Rohimaya Branding
+branding:
+  colors:
+    phoenix_orange: "#FF8C42"
+    peacock_teal: "#4A9B9B"
+    midnight_navy: "#1A1A2E"
+    cream: "#FFF8E7"
+  fonts:
+    heading: "Playfair Display"
+    body: "Inter"

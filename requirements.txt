@@ -1,0 +1,20 @@
+# Original dependencies (Prasad's)
+requests==2.31.0
+python-dotenv==1.0.0
+pydub==0.25.1
+
+# Streamlit UI
+streamlit==1.29.0
+
+# TTS Providers
+openai==1.6.1
+
+# Document processing
+python-docx==1.1.0
+pypdf2==3.0.1
+
+# Audio processing
+ffmpeg-python==0.2.0
+
+# Utilities
+pillow==10.1.0
