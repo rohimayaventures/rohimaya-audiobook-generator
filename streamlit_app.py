@@ -358,7 +358,10 @@ with tab1:
                             progress_bar.progress(35)
                             
                             config = {
-                                'openai_api_key': st.secrets.get('openai', {}).get('api_key')
+                                'openai_api_key': st.secrets.get('openai', {}).get('api_key'),
+                                'inworld_api_key': st.secrets.get('inworld', {}).get('api_key'),
+                                'inworld_workspace_id': st.secrets.get('inworld', {}).get('workspace_id'),
+                                'elevenlabs_api_key': st.secrets.get('elevenlabs', {}).get('api_key')
                             }
                             
                             tts_manager = TTSManager(config)
