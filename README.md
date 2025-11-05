@@ -1,4 +1,4 @@
-# 🎙️ Rohimaya Audiobook Generator - ULTIMATE EDITION
+# 🎙️ PhoenixForge Audio Generator - ULTIMATE EDITION
 
 > **Where the Phoenix Rises and the Peacock Dances**
 
@@ -61,8 +61,8 @@ ElevenLabs integration includes emotional intensity settings from "Neutral" to "
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/rohimayaventures/rohimaya-audiobook-generator.git
-cd rohimaya-audiobook-generator
+git clone https://github.com/rohimayaventures/phoenixforge-audio-generator.git
+cd phoenixforge-audio-generator
 ```
 
 2. **Install dependencies**
@@ -160,7 +160,7 @@ streamlit run streamlit_app_ultimate.py
 
 ### Core Components
 ```
-rohimaya-audiobook-generator/
+phoenixforge-audio-generator/
 ├── streamlit_app_ultimate.py    # Ultimate Edition UI
 ├── src/
 │   ├── chunker.py               # Text chunking logic

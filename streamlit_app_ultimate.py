@@ -22,7 +22,7 @@ from src.merge_audio import merge_audio_files
 # PAGE CONFIGURATION
 # ========================================
 st.set_page_config(
-    page_title="Rohimaya Audiobook Generator - ULTIMATE",
+    page_title="PhoenixForge Audio Generator - ULTIMATE",
     page_icon="🎙️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -441,7 +441,7 @@ st.markdown("""
 # ========================================
 # EPIC HEADER
 # ========================================
-st.title("🎙️ Rohimaya Audiobook Generator")
+st.title("🎙️ PhoenixForge Audio Generator")
 st.markdown('<p class="tagline">Where the Phoenix Rises and the Peacock Dances</p>', unsafe_allow_html=True)
 st.markdown("### 🔥 **ULTIMATE EDITION** - *Powered by Browser Claude, Not ChatGPT!*")
 
