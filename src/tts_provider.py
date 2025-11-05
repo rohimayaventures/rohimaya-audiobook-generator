@@ -34,6 +34,11 @@ class TTSManager:
             from src.tts_openai import OpenAIProvider
             self.providers.append(OpenAIProvider(config['openai_api_key']))
         
+        
+        if config.get('elevenlabs_api_key'):
+            from src.tts_elevenlabs import ElevenLabsProvider
+            self.providers.append(ElevenLabsProvider(config['elevenlabs_api_key']))
+
         if not self.providers:
             raise ValueError("No TTS providers configured")
     

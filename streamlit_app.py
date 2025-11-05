@@ -206,7 +206,11 @@ with st.sidebar:
     
     selected_voice = st.selectbox(
         "Narrator voice:",
-        options=list(voice_options.keys()),
+        options=list(voice_options.keys(,
+        index=0
+    ),
+        index=0
+    ),
         format_func=lambda x: f"{x.title()} - {voice_options[x]}",
         help="Choose the AI voice for your audiobook"
     )
