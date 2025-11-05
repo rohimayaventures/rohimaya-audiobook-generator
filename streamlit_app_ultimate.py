@@ -791,8 +791,116 @@ with tab1:
 
 with tab2:
     st.markdown("### 🎤 Voice Previews")
-    st.info("🎧 Listen to voice samples before generating!")
-    st.warning("⚠️ Voice preview feature coming soon!")
+    st.info("�� Listen to voice samples before generating your audiobook!")
+    
+    st.markdown("---")
+    st.markdown("#### 🎭 OpenAI Voices")
+    
+    sample_text = "Welcome to PhoenixForge Audio, where the Phoenix rises and the Peacock dances. This is a sample of how your audiobook will sound."
+    
+    # OpenAI voice previews
+    openai_voices = {
+        "alloy": "🎭 Neutral & Balanced",
+        "echo": "👔 Male, Clear & Professional", 
+        "fable": "🎩 British, Expressive",
+        "onyx": "🎙️ Deep Male, Authoritative",
+        "nova": "👩 Female, Warm & Friendly",
+        "shimmer": "✨ Female, Soft & Soothing"
+    }
+    
+    for voice, description in openai_voices.items():
+        with st.expander(f"**{voice.title()}** - {description}"):
+            st.markdown(f"*{description}*")
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.caption("Sample: 'Welcome to PhoenixForge Audio...'")
+            with col2:
+                if st.button(f"🎧 Preview", key=f"preview_{voice}"):
+                    try:
+                        client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+                        with st.spinner(f"Generating {voice} preview..."):
+                            response = client.audio.speech.create(
+                                model="tts-1",
+                                voice=voice,
+                                input=sample_text
+                            )
+                            st.audio(response.content, format="audio/mp3")
+                            st.success(f"✅ {voice.title()} preview!")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+    
+    st.markdown("---")
+    st.markdown("#### 🎭 ElevenLabs Voices")
+    st.info("💎 Premium emotional voices with advanced controls")
+    
+    elevenlabs_voices = {
+        "Rachel": "👩 Calm & Clear Narrator",
+        "Domi": "💪 Strong & Confident",
+        "Bella": "🎭 Expressive & Dynamic",
+        "Antoni": "👔 Professional Male",
+        "Elli": "🎨 Emotional & Artistic",
+        "Josh": "🎙️ Deep & Warm"
+    }
+    
+    for voice, description in elevenlabs_voices.items():
+        with st.expander(f"**{voice}** - {description}"):
+            st.markdown(f"*{description}*")
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.caption("�� ElevenLabs premium quality")
+            with col2:
+                if st.button(f"🎧 Preview", key=f"preview_eleven_{voice}"):
+                    try:
+                        from elevenlabs.client import ElevenLabs
+                        client = ElevenLabs(api_key=st.secrets["elevenlabs"]["api_key"])
+                        with st.spinner(f"Generating {voice} preview..."):
+                            audio = client.generate(
+                                text=sample_text,
+                                voice=voice,
+                                model="eleven_monolingual_v1"
+                            )
+                            audio_bytes = b"".join(audio)
+                            st.audio(audio_bytes, format="audio/mp3")
+                            st.success(f"✅ {voice} preview!")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+    
+    st.markdown("---")
+    st.markdown("#### 🎭 Inworld Voices")
+    st.info("🎙️ Prasad's original TTS choice")
+    
+    inworld_voices = {
+        "Deborah": "👩 Female, Warm Narrator",
+        "Michael": "👔 Male, Professional",
+        "Emma": "✨ Female, Young Adult"
+    }
+    
+    for voice, description in inworld_voices.items():
+        with st.expander(f"**{voice}** - {description}"):
+            st.markdown(f"*{description}*")
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.caption("🔥 Original engine choice")
+            with col2:
+                if st.button(f"🎧 Preview", key=f"preview_inworld_{voice}"):
+                    try:
+                        from src.tts_inworld import InworldProvider
+                        client = InworldProvider(api_key=st.secrets["inworld"]["api_key"])
+                        with st.spinner(f"Generating {voice} preview..."):
+                            audio_bytes = client.synthesize(
+                                text=sample_text,
+                                voice_id=voice
+                            )
+                            st.audio(audio_bytes, format="audio/mp3")
+                            st.success(f"✅ {voice} preview!")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+    
+    st.markdown("---")
+    st.success("💡 **Tip:** Try different voices to find your perfect narrator!")
 
 with tab3:
     st.markdown("### ℹ️ About This Ultimate Edition")
