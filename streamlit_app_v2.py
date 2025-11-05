@@ -493,7 +493,7 @@ with tab1:
                         )
                         
                         # Save audio chunk
-                        audio_path = os.path.join(output_dir, f"audio_{i:03d}.mp3")
+                        audio_path = os.path.join(output_dir, f"output_part_{i+1:03d}.mp3")
                         with open(audio_path, "wb") as f:
                             f.write(response.content)
                         
