@@ -1,0 +1,23 @@
+# Supabase CLI Configuration
+# This is a placeholder file for Supabase local development
+
+# Run 'supabase init' to generate a proper config.toml
+# Run 'supabase start' to start local Supabase instance
+# Run 'supabase db push' to apply migrations
+
+project_id = "your-project-id"
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"

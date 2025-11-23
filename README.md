@@ -1,287 +1,296 @@
-# PhoenixForge Audio Generator
+# Rohimaya Audiobook Generator - Monorepo
 
-> **Professional audiobook generation powered by multiple premium TTS providers**
+> **Professional full-stack audiobook generation platform with multi-provider TTS support**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.29.0-FF4B4B.svg)](https://streamlit.io)
+[![Next.js 14](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
 
 ---
 
-## Overview
+## 🏗️ Monorepo Structure
 
-PhoenixForge Audio Generator is an advanced text-to-speech application that transforms manuscripts into professional-quality audiobooks. Built with enterprise-grade architecture and supporting multiple TTS providers, it offers unparalleled flexibility and quality for content creators, publishers, and authors.
+This is a full-stack monorepo containing:
 
-### Key Features
+```
+rohimaya-audiobook-generator/
+├── apps/
+│   ├── web/               # Next.js 14 frontend (Vercel)
+│   └── engine/            # Python audiobook backend (Railway)
+│
+├── packages/
+│   ├── config/            # Shared configuration constants
+│   └── utils/             # Shared utilities
+│
+├── supabase/              # Database schema & migrations
+│   ├── migrations/
+│   └── config.toml
+│
+├── env/
+│   └── .env.example       # Environment variable template
+│
+└── docs/                  # Documentation
+```
 
-- **Multi-Provider Support**: OpenAI TTS, ElevenLabs, and Inworld AI integration
-- **Voice Preview System**: Test voices before committing to full generation
-- **Real-Time Processing**: Live progress tracking with chunk-by-chunk generation
-- **Emotional Control**: Advanced voice modulation for expressive narration (ElevenLabs)
-- **Cost Optimization**: Choose providers based on budget and quality requirements
-- **Professional UI**: Clean, accessible interface with responsive design
+### Applications
+
+#### 🌐 Web Frontend (`apps/web/`)
+- **Status:** 🚧 Coming Soon
+- **Framework:** Next.js 14 (App Router)
+- **Deployment:** Vercel
+- **Features:** User auth, manuscript upload, job tracking, voice selection
+
+#### 🎙️ Python Engine (`apps/engine/`)
+- **Status:** ✅ Production Ready
+- **Framework:** Python 3.8+ with FastAPI (planned)
+- **Deployment:** Railway
+- **Features:** Multi-provider TTS, text chunking, audio processing
 
 ---
 
-## Technical Specifications
+## 🚀 Quick Start
 
-### Supported Formats
-- **Input**: `.txt`, `.docx`, `.md` (up to 200MB)
-- **Output**: High-quality MP3 audiobooks
-
-### TTS Providers
-
-| Provider | Voices | Pricing | Best For |
-|----------|--------|---------|----------|
-| **OpenAI** | 6 professional voices | ~$0.015/1K chars | Cost-effective production |
-| **ElevenLabs** | 6+ emotional voices | ~$0.30/1K chars | Premium quality, fiction |
-| **Inworld** | 3 specialized voices | ~$0.15/1K chars | Balanced quality/cost |
-
-### System Requirements
-- Python 3.8 or higher
-- FFmpeg (for audio processing)
-- 4GB RAM minimum
-- Internet connection for API access
-
----
-
-## Installation
+### Prerequisites
+- **Node.js** 18+ (for frontend)
+- **Python** 3.8+ (for backend)
+- **ffmpeg** (for audio processing)
+- **Supabase** account (for database & storage)
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/rohimayaventures/rohimaya-audiobook-generator.git
+git clone https://github.com/your-username/rohimaya-audiobook-generator.git
 cd rohimaya-audiobook-generator
 ```
 
-### 2. Install Dependencies
+### 2. Environment Setup
 ```bash
+# Copy environment template
+cp env/.env.example env/.env
+
+# Edit env/.env with your API keys and configuration
+```
+
+### 3. Backend Setup (Python Engine)
+```bash
+cd apps/engine
 pip install -r requirements.txt
+
+# Run CLI version
+python -m src.main
+
+# Or run Streamlit UI (experimental)
+cd experimental/streamlit
+streamlit run streamlit_app.py
 ```
 
-### 3. Install FFmpeg
-
-**macOS:**
+### 4. Frontend Setup (Coming Soon)
 ```bash
-brew install ffmpeg
+cd apps/web
+npm install
+npm run dev
 ```
 
-**Ubuntu/Debian:**
+---
+
+## ✨ Features
+
+### Current (Python Engine)
+- ✅ Multi-provider TTS (OpenAI, ElevenLabs, Inworld)
+- ✅ Automatic provider fallback
+- ✅ Intelligent text chunking (sentence-aware)
+- ✅ Audio merging with pydub
+- ✅ Thread-safe rate limiting
+- ✅ Cost tracking per provider
+- ✅ Streamlit web UI (experimental)
+
+### Planned (Full Stack)
+- 🚧 Next.js 14 frontend with modern UI
+- 🚧 User authentication (Supabase)
+- 🚧 Job queue & progress tracking
+- 🚧 Phoenix & Peacock dual-voice mode
+- 🚧 Chapter-based generation
+- 🚧 Manuscript management
+- 🚧 Audiobook library
+
+---
+
+## 🎤 TTS Providers
+
+| Provider | Voices | Cost (per 1K chars) | Quality | Best For |
+|----------|--------|---------------------|---------|----------|
+| **OpenAI TTS-1** | 6 voices (alloy, echo, fable, onyx, nova, shimmer) | $0.015 | Good | Cost-effective production |
+| **ElevenLabs** | Custom voices | Variable | Excellent | Premium quality, fiction |
+| **Inworld** | Multiple | $0.15 | Good | Balanced quality/cost |
+
+---
+
+## 🛠️ Architecture
+
+### Text-to-Audiobook Pipeline
+1. **Upload** → User uploads manuscript (TXT, DOCX, PDF)
+2. **Clean** → Text preprocessing & normalization
+3. **Chunk** → Split into ~1500 char chunks (sentence-aware)
+4. **TTS** → Generate audio for each chunk (parallel, multi-provider)
+5. **Merge** → Concatenate audio chunks into final audiobook
+6. **Export** → Download MP3/M4B audiobook
+
+### Tech Stack
+
+**Frontend:**
+- Next.js 14 (App Router)
+- Tailwind CSS
+- shadcn/ui components
+- Supabase Auth
+- Deployed on **Vercel**
+
+**Backend:**
+- Python 3.8+
+- FastAPI (planned HTTP wrapper)
+- pydub (audio processing)
+- OpenAI, ElevenLabs, Inworld SDKs
+- Deployed on **Railway**
+
+**Database & Storage:**
+- Supabase (PostgreSQL + Storage)
+- Jobs table, file metadata
+- Audio & manuscript buckets
+
+---
+
+## 📦 Packages
+
+### `packages/config/`
+Shared configuration constants (bucket names, API endpoints, etc.)
+
+### `packages/utils/`
+Shared utility functions used across apps
+
+---
+
+## 🗄️ Database Schema (Supabase)
+
+### Tables
+- **`jobs`** - Audiobook generation jobs
+- **`job_files`** - File metadata for manuscripts & audiobooks
+
+### Storage Buckets
+- **`manuscripts`** - Uploaded manuscript files
+- **`audiobooks`** - Generated audiobook files
+
+See [`supabase/migrations/`](supabase/migrations/) for full schema.
+
+---
+
+## 🔐 Environment Variables
+
+See [`env/.env.example`](env/.env.example) for the complete list.
+
+**Required:**
+- `OPENAI_API_KEY` - OpenAI API key
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_ANON_KEY` - Public anon key
+- `SUPABASE_SERVICE_ROLE_KEY` - Service role key (backend only)
+
+**Optional:**
+- `ELEVENLABS_API_KEY` - ElevenLabs API key
+- `INWORLD_API_KEY` - Inworld API key
+
+---
+
+## 📚 Documentation
+
+- [**QUICKSTART.md**](QUICKSTART.md) - Quick start guide
+- [**EPIC_VICTORY.md**](EPIC_VICTORY.md) - Project history & narrative
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - System architecture
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) - Deployment guide
+- [`docs/INTEGRATION_GUIDE.md`](docs/INTEGRATION_GUIDE.md) - Integration docs
+- [`apps/engine/README.md`](apps/engine/README.md) - Python engine details
+- [`apps/web/README.md`](apps/web/README.md) - Frontend details
+
+---
+
+## 🎨 Branding
+
+**Rohimaya Color Palette:**
+- **Phoenix Orange:** `#FF8C42`
+- **Peacock Teal:** `#4A9B9B`
+- **Midnight Navy:** `#1A1A2E`
+- **Cream:** `#FFF8E7`
+
+**Fonts:**
+- **Headings:** Playfair Display
+- **Body:** Inter
+
+---
+
+## 🧪 Development
+
+### Run Backend Locally
 ```bash
-sudo apt-get install ffmpeg
+cd apps/engine
+python -m src.main  # CLI mode
+
+# Or Streamlit UI
+cd experimental/streamlit
+streamlit run streamlit_app.py
 ```
 
-**Windows:** Download from [ffmpeg.org](https://ffmpeg.org)
-
-### 4. Configure API Keys
-
-Create `.streamlit/secrets.toml`:
-```toml
-[openai]
-api_key = "sk-..."
-
-[elevenlabs]
-api_key = "..."
-
-[inworld]
-api_key = "..."
-```
-
-### 5. Launch Application
+### Run Frontend Locally (Coming Soon)
 ```bash
-streamlit run streamlit_app_ultimate.py
+cd apps/web
+npm run dev
 ```
 
-Access at `http://localhost:8501`
-
----
-
-## Usage Guide
-
-### Basic Workflow
-
-1. **Select TTS Provider**: Choose based on your quality and budget requirements
-2. **Choose Voice**: Preview available voices before generation
-3. **Upload Manuscript**: Drag and drop your text file
-4. **Configure Settings**: Adjust chunk size and processing options
-5. **Generate**: Monitor real-time progress
-6. **Download**: Receive high-quality MP3 audiobook
-
-### Advanced Options
-
-- **Chunk Size**: Control processing granularity (500-3000 characters)
-- **Live Text Scrolling**: Visual feedback during generation
-- **Emotional Intensity**: Fine-tune voice expressiveness (ElevenLabs only)
-
----
-
-## Cost Analysis
-
-### Typical Novel (80,000 words ≈ 400,000 characters)
-
-| Provider | Estimated Cost | Quality Level |
-|----------|---------------|---------------|
-| OpenAI | $6 | ⭐⭐⭐⭐ Professional |
-| ElevenLabs | $120 | ⭐⭐⭐⭐⭐ Premium |
-| Inworld | $60 | ⭐⭐⭐⭐ High Quality |
-
-**Traditional Studio Production**: $1,500 - $5,000+
-
-**ROI**: 96-99% cost reduction vs. traditional methods
-
----
-
-## Architecture
-
-### Component Structure
-```
-phoenixforge-audio-generator/
-├── streamlit_app_ultimate.py    # Main application
-├── src/
-│   ├── chunker.py               # Text segmentation
-│   ├── text_cleaner.py          # Preprocessing
-│   ├── merge_audio.py           # Audio concatenation
-│   ├── tts_provider.py          # Provider abstraction
-│   ├── tts_openai.py            # OpenAI integration
-│   ├── tts_elevenlabs.py        # ElevenLabs integration
-│   └── tts_inworld.py           # Inworld integration
-└── requirements.txt
-```
-
-### Technology Stack
-
-- **Framework**: Streamlit (Python)
-- **TTS APIs**: OpenAI, ElevenLabs, Inworld
-- **Audio Processing**: PyDub, FFmpeg
-- **Document Parsing**: python-docx, PyPDF2
-
----
-
-## API Integration
-
-### Provider Abstractions
-
-All TTS providers implement a common interface:
-```python
-class TTSProvider(ABC):
-    @abstractmethod
-    def synthesize(self, text: str, voice_id: str) -> bytes:
-        pass
-    
-    @abstractmethod
-    def get_available_voices(self) -> Dict[str, str]:
-        pass
-    
-    @abstractmethod
-    def estimate_cost(self, text: str) -> float:
-        pass
-```
-
-This architecture enables:
-- Easy provider switching
-- Failover capabilities
-- Cost optimization strategies
-
----
-
-## Performance Metrics
-
-- **Processing Speed**: ~1,000 characters/second (varies by provider)
-- **Uptime**: 99.9% (dependent on provider APIs)
-- **Supported Concurrency**: Single-threaded by design
-- **Maximum File Size**: 200MB input limit
-
----
-
-## Security & Privacy
-
-- API keys stored locally in Streamlit secrets
-- No data persistence between sessions
-- Temporary file cleanup after processing
-- HTTPS encryption for all API communications
-
----
-
-## Roadmap
-
-### Planned Features
-- Batch processing for multiple manuscripts
-- Multi-voice support (character differentiation)
-- Background music integration
-- Chapter marker generation
-- REST API endpoint
-- Cloud deployment options
-
-### Under Consideration
-- Voice cloning (ethical implementation)
-- Real-time editing interface
-- Multi-language support
-- Mobile applications
-
----
-
-## Contributing
-
-We welcome contributions! Please follow these guidelines:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/enhancement`)
-3. Commit changes (`git commit -m 'Add enhancement'`)
-4. Push to branch (`git push origin feature/enhancement`)
-5. Open a Pull Request
-
-### Development Setup
+### Run Supabase Locally
 ```bash
-pip install -r requirements.txt
-pre-commit install
-pytest tests/
+supabase start
+supabase db push
 ```
 
 ---
 
-## Support
+## 🚀 Deployment
 
-### Documentation
-- [Installation Guide](docs/installation.md)
-- [API Reference](docs/api.md)
-- [Troubleshooting](docs/troubleshooting.md)
+### Frontend (Vercel)
+```bash
+cd apps/web
+vercel deploy
+```
 
-### Contact
-- GitHub Issues: [Report bugs or request features](https://github.com/rohimayaventures/rohimaya-audiobook-generator/issues)
-- Email: support@phoenixforge.audio
+### Backend (Railway)
+```bash
+cd apps/engine
+# Configure Railway project
+railway up
+```
 
----
-
-## License
-
-MIT License - See [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-Built with contributions from:
-- **Core Development Team**: Advanced AI integration and architecture
-- **Original TTS Engine**: Prasad Pagade
-- **UI/UX Design**: Professional design consultation
-- **Quality Assurance**: Extensive testing and validation
+### Database (Supabase)
+```bash
+cd supabase
+supabase db push
+```
 
 ---
 
-## Citations
+## 📝 License
 
-This project utilizes the following technologies:
-- OpenAI TTS API
-- ElevenLabs API
-- Inworld AI API
-- Streamlit Framework
-- FFmpeg Audio Processing
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-<div align="center">
+## 🙏 Credits
 
-**Professional audiobook generation, simplified.**
+- **Original Engine:** Prasad's TTS foundation
+- **Dual-Voice System:** Husband's Phoenix/Peacock implementation
+- **Monorepo Restructure:** Claude (VS Code Assistant)
 
-[Documentation](docs/) • [Issues](https://github.com/rohimayaventures/rohimaya-audiobook-generator/issues) • [Releases](https://github.com/rohimayaventures/rohimaya-audiobook-generator/releases)
+---
 
-</div>
+## 📞 Support
+
+For issues, questions, or feature requests, please open an issue on GitHub.
+
+---
+
+**Last Updated:** 2025-11-22
+**Status:** Active Development

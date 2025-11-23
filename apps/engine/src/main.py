@@ -12,9 +12,9 @@ Dependencies:
 """
 
 import os
-from chunker import chunk_text_file
-from tts_inworld import synthesize_with_inworld
-from merge_audio import merge_audio_files
+from .chunker import chunk_text_file
+from .tts_inworld import synthesize_with_inworld
+from .merge_audio import merge_audio_files
 
 
 def main():

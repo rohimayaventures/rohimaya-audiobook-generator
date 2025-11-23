@@ -27,16 +27,16 @@ class TTSManager:
         
         # Initialize providers
         if config.get('inworld_api_key'):
-            from src.tts_inworld import InworldProvider
+            from .tts_inworld import InworldProvider
             self.providers.append(InworldProvider(config['inworld_api_key']))
-        
+
         if config.get('openai_api_key'):
-            from src.tts_openai import OpenAIProvider
+            from .tts_openai import OpenAIProvider
             self.providers.append(OpenAIProvider(config['openai_api_key']))
-        
-        
+
+
         if config.get('elevenlabs_api_key'):
-            from src.tts_elevenlabs import ElevenLabsProvider
+            from .tts_elevenlabs import ElevenLabsProvider
             self.providers.append(ElevenLabsProvider(config['elevenlabs_api_key']))
 
         if not self.providers:
