@@ -17,6 +17,14 @@ pypdf2==3.0.1
 ffmpeg-python==0.2.0
 
 # Utilities
-pillow==10.1.0
+pillow>=10.2.0
 
 elevenlabs==1.0.0
+
+# FastAPI Backend
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+supabase==2.3.0
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.6

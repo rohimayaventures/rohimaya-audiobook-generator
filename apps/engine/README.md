@@ -20,6 +20,18 @@ apps/engine/
 │   ├── cost_tracker.py      # Cost tracking
 │   └── main.py              # CLI entry point
 │
+├── core/                     # Shared utilities (from husband's code)
+│   ├── chapter_parser.py    # Chapter extraction and dialogue detection
+│   └── advanced_chunker.py  # Dual-limit chunking algorithm
+│
+├── pipelines/                # Generation workflows
+│   ├── standard_single_voice.py      # Full-book, single narrator
+│   └── phoenix_peacock_dual_voice.py # Character-aware dual-voice
+│
+├── api/                      # FastAPI HTTP wrapper (NEW)
+│   ├── __init__.py
+│   └── main.py              # Production HTTP API
+│
 ├── experimental/
 │   └── streamlit/           # Legacy Streamlit UI apps
 │       ├── streamlit_app.py           # Main working app (OpenAI TTS)
@@ -80,34 +92,91 @@ Edit `config.yaml` to configure:
 
 ## Usage
 
-### CLI Mode
+### 1. FastAPI HTTP API (Production)
+
+Run the HTTP API server:
+
+```bash
+# From repo root
+cd apps/engine
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Or run directly:
+
+```bash
+python -m api.main
+```
+
+**API Endpoints:**
+- `GET /health` - Health check (status, version, timestamp)
+- `POST /jobs/test` - Test job creation (validation stub)
+- `GET /docs` - Interactive API documentation (Swagger UI)
+- `GET /redoc` - Alternative API docs (ReDoc)
+
+**Test the API:**
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Create test job
+curl -X POST http://localhost:8000/jobs/test \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello world", "mode": "single_voice"}'
+```
+
+**Environment Variables:**
+- `ALLOWED_ORIGINS` - CORS allowed origins (default: `http://localhost:3000`)
+- `API_HOST` - API host (default: `0.0.0.0`)
+- `API_PORT` - API port (default: `8000`)
+- `ENVIRONMENT` - Environment mode (development/production)
+
+### 2. CLI Mode (Legacy)
 ```bash
 cd apps/engine
 python -m src.main
 ```
 
-### Streamlit UI (Experimental)
+### 3. Streamlit UI (Experimental)
 ```bash
 cd apps/engine/experimental/streamlit
 streamlit run streamlit_app.py
 ```
 
-**Note:** Streamlit apps are for local testing only. Production will use the Next.js frontend with a FastAPI/Flask HTTP API wrapper.
+**Note:** Streamlit apps are for local testing only. Production uses the Next.js frontend (apps/web) with the FastAPI backend.
 
 ## Deployment
 
 ### Railway (Backend API)
 - **Platform:** Railway
 - **Runtime:** Python 3.11+
-- **Entry Point:** TBD (FastAPI wrapper)
+- **Entry Point:** `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
 - **Environment Variables:** See `env/.env.example`
+- **Build Command:** `pip install -r requirements.txt`
+- **Start Command:** `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
 
-### Future: HTTP API
-A FastAPI wrapper will expose these endpoints:
-- `POST /api/jobs` - Create audiobook generation job
-- `GET /api/jobs/{job_id}` - Get job status
-- `GET /api/jobs/{job_id}/download` - Download audiobook
-- `POST /api/preview` - Generate voice preview
+**Railway Configuration:**
+```json
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "uvicorn api.main:app --host 0.0.0.0 --port $PORT",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
+```
+
+### Planned API Endpoints (v1.0)
+Future production endpoints:
+- ✅ `GET /health` - Health check (IMPLEMENTED)
+- ✅ `POST /jobs/test` - Test job creation (IMPLEMENTED)
+- ⏳ `POST /jobs` - Create audiobook generation job
+- ⏳ `GET /jobs/{job_id}` - Get job status
+- ⏳ `GET /jobs/{job_id}/download` - Download audiobook
+- ⏳ `POST /preview` - Generate voice preview (3-5 seconds)
+- ⏳ `GET /voices` - List available TTS voices
 
 ## Architecture
 
@@ -138,13 +207,15 @@ audio_bytes = manager.synthesize_with_fallback(text, voice_id="alloy")
 - Automatic fallback: Tries cheaper providers first
 
 ## Future Enhancements
-- [ ] Phoenix & Peacock dual-voice mode (from husband's repo)
-- [ ] Chapter-based generation
-- [ ] Regeneration of specific chapters
-- [ ] FastAPI HTTP wrapper
+- [x] Phoenix & Peacock dual-voice mode (IMPLEMENTED in `pipelines/`)
+- [x] Chapter-based generation (IMPLEMENTED in `core/chapter_parser.py`)
+- [x] FastAPI HTTP wrapper (IMPLEMENTED in `api/main.py`)
+- [ ] Full job orchestration (create, poll, download)
 - [ ] Supabase integration (jobs table, file storage)
 - [ ] Progress tracking (WebSocket/SSE)
 - [ ] Audio post-processing (normalization, noise reduction)
+- [ ] Regeneration of specific chapters
+- [ ] Voice preview generation (3-5 sec samples)
 
 ---
 **Last Updated:** 2025-11-22
