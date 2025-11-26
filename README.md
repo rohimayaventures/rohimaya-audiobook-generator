@@ -1,4 +1,4 @@
-# Rohimaya Audiobook Generator - Monorepo
+# AuthorFlow Studios - Monorepo
 
 > **Professional full-stack audiobook generation platform with multi-provider TTS support**
 
@@ -13,7 +13,7 @@
 This is a full-stack monorepo containing:
 
 ```
-rohimaya-audiobook-generator/
+authorflow-studios/
 ├── apps/
 │   ├── web/               # Next.js 14 frontend (Vercel)
 │   └── engine/            # Python audiobook backend (Railway)
@@ -58,7 +58,7 @@ rohimaya-audiobook-generator/
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/your-username/rohimaya-audiobook-generator.git
+git clone https://github.com/rohimayaventures/rohimaya-audiobook-generator.git
 cd rohimaya-audiobook-generator
 ```
 

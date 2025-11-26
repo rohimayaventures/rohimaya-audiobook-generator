@@ -1,5 +1,5 @@
 """
-Rohimaya Audiobook Engine - FastAPI Application
+AuthorFlow Studios - FastAPI Application
 Production HTTP API for audiobook generation
 """
 
@@ -25,7 +25,7 @@ load_dotenv(dotenv_path=env_path)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Rohimaya Audiobook Engine API",
+    title="AuthorFlow Studios API",
     description="Production API for generating studio-quality audiobooks from manuscripts",
     version="0.2.0",
     docs_url="/docs",
@@ -160,7 +160,7 @@ async def health_check() -> HealthResponse:
     """Health check endpoint for monitoring"""
     return HealthResponse(
         status="ok",
-        service="rohimaya-engine",
+        service="authorflow-engine",
         version="0.2.0",
         timestamp=datetime.utcnow().isoformat() + "Z"
     )
