@@ -34,12 +34,19 @@ Since this is a monorepo, you need to set the root directory:
 Go to "Variables" tab and add these (copy from your `env/.env` file):
 
 ```bash
-# Supabase
+# Supabase (Database & Auth only)
 SUPABASE_URL=https://uiqjtiacuegfhfkrbngu.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-SUPABASE_BUCKET_MANUSCRIPTS=manuscripts
-SUPABASE_BUCKET_AUDIOBOOKS=audiobooks
+
+# Cloudflare R2 Storage
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_ACCESS_KEY_ID=your_r2_access_key
+R2_SECRET_ACCESS_KEY=your_r2_secret_key
+R2_BUCKET_MANUSCRIPTS=manuscripts
+R2_BUCKET_AUDIOBOOKS=audiobooks
+R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+R2_PUBLIC_URL=https://pub-<hash>.r2.dev  # Optional
 
 # TTS API Keys
 OPENAI_API_KEY=sk-proj-...
@@ -165,7 +172,70 @@ ALLOWED_ORIGINS=https://your-app.vercel.app
 
 ---
 
+## ✅ Cloudflare R2 Storage Setup
+
+**Important:** We use Cloudflare R2 for file storage (manuscripts + audiobooks), not Supabase Storage.
+
+### Step 1: Create R2 Buckets
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Click **R2** in the sidebar
+3. Click **Create bucket**
+4. Create two buckets:
+   - Name: `manuscripts` (for uploaded text files)
+   - Name: `audiobooks` (for generated audio files)
+5. Click **Create bucket** for each
+
+### Step 2: Generate R2 API Tokens
+
+1. Still in R2, click **Manage R2 API Tokens**
+2. Click **Create API Token**
+3. Configure:
+   - **Token name:** `rohimaya-backend`
+   - **Permissions:** Object Read & Write
+   - **Apply to specific buckets (optional):** Select both buckets
+4. Click **Create API Token**
+5. Copy and save these values:
+   - **Access Key ID** → `R2_ACCESS_KEY_ID`
+   - **Secret Access Key** → `R2_SECRET_ACCESS_KEY`
+   - **Endpoint** → Will be `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
+
+### Step 3: Get Account ID
+
+1. Go to R2 Overview page
+2. Copy your **Account ID** (shown in the URL or page header)
+3. This becomes your `R2_ACCOUNT_ID`
+
+### Step 4: Configure R2 in Railway
+
+Add these environment variables to your Railway deployment:
+
+```bash
+R2_ACCOUNT_ID=your_account_id_here
+R2_ACCESS_KEY_ID=your_access_key_here
+R2_SECRET_ACCESS_KEY=your_secret_key_here
+R2_BUCKET_MANUSCRIPTS=manuscripts
+R2_BUCKET_AUDIOBOOKS=audiobooks
+R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+```
+
+**Optional:** Enable R2 public access and add:
+```bash
+R2_PUBLIC_URL=https://pub-xxxx.r2.dev
+```
+
+### Step 5: Verify R2 Setup
+
+After deploying, check Railway logs for:
+```
+✅ R2 Storage initialized: https://xxxxx.r2.cloudflarestorage.com
+```
+
+---
+
 ## ✅ Database Setup - Supabase
+
+**Note:** Supabase is now used ONLY for database and auth, NOT for storage.
 
 ### Step 1: Apply Migrations
 
@@ -198,16 +268,7 @@ supabase db push
 supabase migration list
 ```
 
-### Step 2: Create Storage Buckets
-
-If not created by migration, manually create:
-
-1. Go to Supabase → Storage
-2. Create bucket `manuscripts` (Private)
-3. Create bucket `audiobooks` (Private)
-4. Apply RLS policies from migration file
-
-### Step 3: Verify Tables Exist
+### Step 2: Verify Tables Exist
 
 Go to Supabase → Table Editor and verify:
 - ✅ `jobs` table with all columns

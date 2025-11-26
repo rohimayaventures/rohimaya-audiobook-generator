@@ -1,6 +1,7 @@
 """
 Supabase Database Integration
-Handles all database and storage operations
+Handles database operations (jobs, job_files)
+Storage is handled by Cloudflare R2 (see storage_r2.py)
 """
 
 import os
@@ -9,16 +10,19 @@ from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
+# Import R2 storage client
+from .storage_r2 import r2
+
 # Load environment variables
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
 load_dotenv(dotenv_path=env_path)
 
 
 class SupabaseDB:
-    """Wrapper for Supabase database and storage operations"""
+    """Wrapper for Supabase database operations (storage moved to R2)"""
 
     def __init__(self):
-        """Initialize Supabase client"""
+        """Initialize Supabase client for database only"""
         self.url = os.getenv("SUPABASE_URL")
         self.service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
@@ -28,8 +32,8 @@ class SupabaseDB:
         # Use service role key for backend operations (bypasses RLS)
         self.client: Client = create_client(self.url, self.service_role_key)
 
-        self.manuscripts_bucket = os.getenv("SUPABASE_BUCKET_MANUSCRIPTS", "manuscripts")
-        self.audiobooks_bucket = os.getenv("SUPABASE_BUCKET_AUDIOBOOKS", "audiobooks")
+        # Storage now handled by R2 (imported above)
+        self.storage = r2
 
     # ========================================================================
     # JOB OPERATIONS
@@ -148,46 +152,51 @@ class SupabaseDB:
         return result.data if result.data else []
 
     # ========================================================================
-    # STORAGE OPERATIONS
+    # STORAGE OPERATIONS (Delegated to R2)
     # ========================================================================
 
-    def upload_manuscript(self, user_id: str, filename: str, file_content: bytes) -> str:
+    def upload_manuscript(
+        self,
+        user_id: str,
+        filename: str,
+        file_content: bytes,
+        job_id: Optional[str] = None
+    ) -> str:
         """
-        Upload manuscript to Supabase Storage
+        Upload manuscript to R2 storage
 
         Args:
             user_id: User UUID
             filename: Original filename
             file_content: File bytes
+            job_id: Optional job ID for organization
 
         Returns:
-            Storage path (e.g., "user123/my-book.txt")
+            R2 object key (e.g., "manuscripts/user123/book.txt")
         """
-        storage_path = f"{user_id}/{filename}"
+        return self.storage.upload_manuscript(user_id, filename, file_content, job_id)
 
-        self.client.storage.from_(self.manuscripts_bucket).upload(
-            path=storage_path,
-            file=file_content,
-            file_options={"content-type": "text/plain"}
-        )
-
-        return storage_path
-
-    def download_manuscript(self, storage_path: str) -> bytes:
+    def download_manuscript(self, object_key: str) -> bytes:
         """
-        Download manuscript from Supabase Storage
+        Download manuscript from R2 storage
 
         Args:
-            storage_path: Path in storage (e.g., "user123/my-book.txt")
+            object_key: R2 object key
 
         Returns:
             File content as bytes
         """
-        return self.client.storage.from_(self.manuscripts_bucket).download(storage_path)
+        return self.storage.download_manuscript(object_key)
 
-    def upload_audiobook(self, user_id: str, job_id: str, filename: str, file_content: bytes) -> str:
+    def upload_audiobook(
+        self,
+        user_id: str,
+        job_id: str,
+        filename: str,
+        file_content: bytes
+    ) -> str:
         """
-        Upload generated audiobook to Supabase Storage
+        Upload generated audiobook to R2 storage
 
         Args:
             user_id: User UUID
@@ -196,51 +205,40 @@ class SupabaseDB:
             file_content: Audio file bytes
 
         Returns:
-            Storage path
+            R2 object key (e.g., "audiobooks/user123/job456/final.mp3")
         """
-        storage_path = f"{user_id}/{job_id}/{filename}"
+        return self.storage.upload_audiobook(user_id, job_id, filename, file_content)
 
-        self.client.storage.from_(self.audiobooks_bucket).upload(
-            path=storage_path,
-            file=file_content,
-            file_options={"content-type": "audio/mpeg"}
-        )
-
-        return storage_path
-
-    def get_download_url(self, storage_path: str, expires_in: int = 3600) -> str:
+    def get_download_url(self, object_key: str, expires_in: int = 3600) -> str:
         """
-        Get signed download URL for audiobook
+        Get presigned download URL for audiobook from R2
 
         Args:
-            storage_path: Path in storage
+            object_key: R2 object key
             expires_in: URL expiration time in seconds (default 1 hour)
 
         Returns:
-            Signed download URL
+            Presigned download URL
         """
-        result = self.client.storage.from_(self.audiobooks_bucket).create_signed_url(
-            path=storage_path,
-            expires_in=expires_in
-        )
-        return result['signedURL']
+        return self.storage.generate_presigned_url(object_key, expires_in)
 
-    def delete_storage_file(self, bucket: str, storage_path: str) -> bool:
+    def delete_storage_file(self, bucket_type: str, object_key: str) -> bool:
         """
-        Delete file from storage
+        Delete file from R2 storage
 
         Args:
-            bucket: Bucket name (manuscripts or audiobooks)
-            storage_path: Path in storage
+            bucket_type: "manuscripts" or "audiobooks"
+            object_key: R2 object key
 
         Returns:
             True if deleted successfully
         """
-        try:
-            self.client.storage.from_(bucket).remove([storage_path])
-            return True
-        except Exception as e:
-            print(f"Error deleting {storage_path}: {e}")
+        if bucket_type == "manuscripts":
+            return self.storage.delete_manuscript(object_key)
+        elif bucket_type == "audiobooks":
+            return self.storage.delete_audiobook(object_key)
+        else:
+            print(f"❌ Unknown bucket type: {bucket_type}")
             return False
 
 
