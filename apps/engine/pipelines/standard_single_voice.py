@@ -169,7 +169,8 @@ class SingleVoicePipeline:
     def generate_full_book(
         self,
         book_text: str,
-        output_dir: Path
+        output_dir: Path,
+        book_title: str = "Audiobook"
     ) -> List[Path]:
         """
         Generate audiobook for entire book.
@@ -177,9 +178,10 @@ class SingleVoicePipeline:
         Args:
             book_text: Full book text
             output_dir: Directory to save output files
+            book_title: Title for the final merged audiobook file
 
         Returns:
-            List of paths to final chapter audio files
+            List of paths to audio files (chapters + final merged file as last item)
         """
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -196,19 +198,35 @@ class SingleVoicePipeline:
             return []
 
         # Generate each chapter
-        final_paths = []
+        chapter_paths = []
         for chapter in chapters:
             final_path = self.generate_chapter(chapter, output_dir)
             if final_path:
-                final_paths.append(final_path)
+                chapter_paths.append(final_path)
+
+        if not chapter_paths:
+            print("❌ No chapters generated!")
+            return []
+
+        # Merge all chapters into final audiobook
+        safe_title = sanitize_title_for_filename(book_title)
+        final_book_path = output_dir / f"{safe_title}_COMPLETE.mp3"
+
+        print(f"\n📚 Merging {len(chapter_paths)} chapters into final audiobook...")
+        if self.merge_chunks_pydub(chapter_paths, final_book_path):
+            print(f"✅ Final audiobook: {final_book_path.name}")
+        else:
+            print("⚠️ Could not merge chapters, using last chapter as output")
+            final_book_path = chapter_paths[-1]
 
         print("\n" + "=" * 60)
         print(f"✅ Book Generation Complete!")
-        print(f"   Generated {len(final_paths)}/{len(chapters)} chapters")
+        print(f"   Generated {len(chapter_paths)}/{len(chapters)} chapters")
         print(f"   Output: {output_dir}")
         print("=" * 60)
 
-        return final_paths
+        # Return all chapter paths plus the final merged file
+        return chapter_paths + [final_book_path]
 
 
 def generate_single_voice_audiobook(
@@ -216,7 +234,8 @@ def generate_single_voice_audiobook(
     output_dir: Path,
     api_key: str,
     voice_id: str,
-    tts_provider: str = "openai"
+    tts_provider: str = "openai",
+    book_title: str = "Audiobook"
 ) -> List[Path]:
     """
     Convenience function to generate a single-voice audiobook.
@@ -227,9 +246,10 @@ def generate_single_voice_audiobook(
         api_key: API key for the TTS provider
         voice_id: Voice ID to use for narration
         tts_provider: TTS provider (currently only 'openai' supported)
+        book_title: Title for the final merged audiobook file
 
     Returns:
-        List of paths to generated audio files
+        List of paths to generated audio files (final merged file is last)
     """
     if tts_provider != "openai":
         raise ValueError(f"Single voice pipeline currently only supports OpenAI, got: {tts_provider}")
@@ -239,4 +259,4 @@ def generate_single_voice_audiobook(
         voice_name=voice_id,
     )
 
-    return pipeline.generate_full_book(manuscript_text, output_dir)
+    return pipeline.generate_full_book(manuscript_text, output_dir, book_title)

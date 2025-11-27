@@ -394,14 +394,8 @@ async def retry_job(
             detail=f"Can only retry failed jobs (current status: {job['status']})"
         )
 
-    # Check max retries (optional limit)
-    MAX_RETRIES = 3
+    # Track retry count (no limit for now during development)
     current_retry_count = job.get("retry_count", 0)
-    if current_retry_count >= MAX_RETRIES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Maximum retry limit ({MAX_RETRIES}) reached for this job"
-        )
 
     # Reset job for retry
     updates = {

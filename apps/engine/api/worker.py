@@ -104,6 +104,7 @@ async def process_job(job_id: str):
                 api_key,
                 job["narrator_voice_id"],
                 tts_provider,
+                job["title"],  # Pass book title for final merged file
             )
 
         elif mode == "dual_voice":
