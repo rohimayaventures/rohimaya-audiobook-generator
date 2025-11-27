@@ -231,15 +231,15 @@ export default function LandingPage() {
                   <p className="text-white/60 text-sm">Perfect for indie authors</p>
                 </div>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-white">$19</span>
+                  <span className="text-4xl font-bold text-white">$29</span>
                   <span className="text-white/60">/month</span>
                 </div>
                 <ul className="space-y-3 mb-8">
                   {[
-                    '5 audiobook projects/month',
-                    'Up to 50,000 words each',
-                    'Standard voice selection',
-                    'MP3 export',
+                    '3 audiobooks per month',
+                    'Up to 1 hour per book',
+                    'Findaway-ready packages',
+                    'Emotional TTS',
                     'Email support',
                   ].map((feature) => (
                     <li key={feature} className="flex items-center gap-2 text-sm text-white/70">
@@ -250,7 +250,7 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <SecondaryButton href="/signup" className="w-full">
+                <SecondaryButton href="/pricing" className="w-full">
                   Get Started
                 </SecondaryButton>
               </GlassCard>
@@ -265,16 +265,16 @@ export default function LandingPage() {
                   <p className="text-white/60 text-sm">For serious authors</p>
                 </div>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-white">$49</span>
+                  <span className="text-4xl font-bold text-white">$79</span>
                   <span className="text-white/60">/month</span>
                 </div>
                 <ul className="space-y-3 mb-8">
                   {[
-                    '15 audiobook projects/month',
-                    'Up to 150,000 words each',
-                    'Premium voice library',
+                    'Unlimited audiobooks',
+                    'Up to 6 hours per book',
                     'Multi-character voices',
-                    'MP3, WAV, M4B export',
+                    'Spicy retail samples',
+                    'Premium covers',
                     'Priority support',
                   ].map((feature) => (
                     <li key={feature} className="flex items-center gap-2 text-sm text-white/70">
@@ -285,7 +285,7 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <PrimaryButton href="/signup" className="w-full">
+                <PrimaryButton href="/pricing" className="w-full">
                   Start Free Trial
                 </PrimaryButton>
               </GlassCard>
@@ -297,16 +297,15 @@ export default function LandingPage() {
                   <p className="text-white/60 text-sm">For publishing houses</p>
                 </div>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-white">$149</span>
+                  <span className="text-4xl font-bold text-white">$249</span>
                   <span className="text-white/60">/month</span>
                 </div>
                 <ul className="space-y-3 mb-8">
                   {[
-                    'Unlimited projects',
-                    'Unlimited word count',
-                    'All premium voices',
-                    'Custom voice cloning',
-                    'All export formats',
+                    'Everything in Author Pro',
+                    'Unlimited book length',
+                    'Team access (5 members)',
+                    'Custom branding',
                     'API access',
                     'Dedicated support',
                   ].map((feature) => (
@@ -318,7 +317,7 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <SecondaryButton href="/signup" className="w-full">
+                <SecondaryButton href="/pricing" className="w-full">
                   Contact Sales
                 </SecondaryButton>
               </GlassCard>

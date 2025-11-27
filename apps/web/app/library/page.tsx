@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { getCurrentUser } from '@/lib/supabaseClient'
-import { getJobs, getJobDownloadUrl, retryJob, type Job } from '@/lib/apiClient'
+import { getJobs, getJobDownloadUrl, retryJob, deleteJob, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
 // Helper to get friendly voice quality name
@@ -53,6 +53,7 @@ function LibraryContent() {
   const [retrying, setRetrying] = useState<string | null>(null)
   const [downloadUrls, setDownloadUrls] = useState<Record<string, string>>({})
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -127,6 +128,30 @@ function LibraryContent() {
       alert(err instanceof Error ? err.message : 'Failed to get download URL')
     } finally {
       setDownloading(null)
+    }
+  }
+
+  const handleDelete = async (jobId: string, jobTitle: string) => {
+    if (!confirm(`Are you sure you want to delete "${jobTitle || 'Untitled'}"? This action cannot be undone.`)) {
+      return
+    }
+
+    setDeleting(jobId)
+    try {
+      await deleteJob(jobId)
+      // Remove job from local state
+      setJobs(jobs.filter(j => j.id !== jobId))
+      // Clean up cached download URL
+      setDownloadUrls(prev => {
+        const newUrls = { ...prev }
+        delete newUrls[jobId]
+        return newUrls
+      })
+    } catch (err) {
+      console.error('Failed to delete job:', err)
+      alert(err instanceof Error ? err.message : 'Failed to delete job')
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -260,10 +285,10 @@ function LibraryContent() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <SecondaryButton
                     href={`/job/${job.id}`}
-                    className="flex-1"
+                    className="flex-1 min-w-[100px]"
                     size="sm"
                   >
                     View details
@@ -271,7 +296,7 @@ function LibraryContent() {
 
                   {job.status === 'completed' && (
                     <PrimaryButton
-                      className="flex-1"
+                      className="flex-1 min-w-[100px]"
                       size="sm"
                       onClick={() => handleDownload(job)}
                       disabled={downloading === job.id}
@@ -282,13 +307,34 @@ function LibraryContent() {
 
                   {job.status === 'failed' && (
                     <PrimaryButton
-                      className="flex-1"
+                      className="flex-1 min-w-[100px]"
                       size="sm"
                       onClick={() => handleRetry(job.id)}
                       disabled={retrying === job.id}
                     >
                       {retrying === job.id ? 'Retrying...' : 'Retry'}
                     </PrimaryButton>
+                  )}
+
+                  {/* Delete button for completed or failed jobs */}
+                  {(job.status === 'completed' || job.status === 'failed') && (
+                    <button
+                      onClick={() => handleDelete(job.id, job.title)}
+                      disabled={deleting === job.id}
+                      className="p-2 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      title="Delete project"
+                    >
+                      {deleting === job.id ? (
+                        <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
+                    </button>
                   )}
                 </div>
               </GlassCard>

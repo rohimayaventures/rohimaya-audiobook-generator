@@ -41,8 +41,11 @@ export function Navbar({ user, onLogout }: NavbarProps) {
     ? [
         { href: '/dashboard', label: 'Dashboard' },
         { href: '/library', label: 'Library' },
+        { href: '/pricing', label: 'Pricing' },
       ]
-    : []
+    : [
+        { href: '/pricing', label: 'Pricing' },
+      ]
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-af-midnight/80 border-b border-af-card-border">
@@ -99,6 +102,13 @@ export function Navbar({ user, onLogout }: NavbarProps) {
                 {/* Dropdown menu */}
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 glass py-2">
+                    <Link
+                      href="/billing"
+                      className="block px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/5 transition-colors"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      Billing
+                    </Link>
                     <Link
                       href="/settings"
                       className="block px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/5 transition-colors"
@@ -171,6 +181,13 @@ export function Navbar({ user, onLogout }: NavbarProps) {
             ))}
             {user ? (
               <>
+                <Link
+                  href="/billing"
+                  className="block py-2 text-sm font-medium text-white/70 hover:text-white"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Billing
+                </Link>
                 <Link
                   href="/settings"
                   className="block py-2 text-sm font-medium text-white/70 hover:text-white"
