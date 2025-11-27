@@ -10,29 +10,15 @@ import { createClient, getCurrentUser } from '@/lib/supabaseClient'
 import { createJob, getJobs, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
-// TTS Provider options
-const TTS_PROVIDERS = [
-  { id: 'openai', name: 'OpenAI', description: 'High quality, fast' },
-  { id: 'elevenlabs', name: 'ElevenLabs', description: 'Premium voices' },
+// Voice options (OpenAI only for now)
+const VOICES = [
+  { id: 'alloy', name: 'Alloy', description: 'Neutral and balanced' },
+  { id: 'echo', name: 'Echo', description: 'Deep and resonant' },
+  { id: 'fable', name: 'Fable', description: 'Warm and storytelling' },
+  { id: 'onyx', name: 'Onyx', description: 'Deep and authoritative' },
+  { id: 'nova', name: 'Nova', description: 'Bright and energetic' },
+  { id: 'shimmer', name: 'Shimmer', description: 'Soft and gentle' },
 ]
-
-// Voice options by provider
-const VOICES = {
-  openai: [
-    { id: 'alloy', name: 'Alloy', description: 'Neutral and balanced' },
-    { id: 'echo', name: 'Echo', description: 'Deep and resonant' },
-    { id: 'fable', name: 'Fable', description: 'Warm and storytelling' },
-    { id: 'onyx', name: 'Onyx', description: 'Deep and authoritative' },
-    { id: 'nova', name: 'Nova', description: 'Bright and energetic' },
-    { id: 'shimmer', name: 'Shimmer', description: 'Soft and gentle' },
-  ],
-  elevenlabs: [
-    { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', description: 'Calm and professional' },
-    { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella', description: 'Soft and young' },
-    { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', description: 'Well-rounded and versatile' },
-    { id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh', description: 'Deep and narration-focused' },
-  ],
-}
 
 // Output format options
 const OUTPUT_FORMATS = [
@@ -60,7 +46,6 @@ function DashboardContent() {
   const [file, setFile] = useState<File | null>(null)
   const [text, setText] = useState('')
   const [title, setTitle] = useState('')
-  const [ttsProvider, setTtsProvider] = useState<'openai' | 'elevenlabs'>('openai')
   const [voiceId, setVoiceId] = useState('alloy')
   const [outputFormat, setOutputFormat] = useState('mp3')
   const [creating, setCreating] = useState(false)
@@ -129,7 +114,7 @@ function DashboardContent() {
         title: title || (file?.name.replace(/\.[^/.]+$/, '') || 'Untitled'),
         source_type: inputMode === 'file' ? 'upload' as const : 'paste' as const,
         mode: 'single_voice' as const,
-        tts_provider: ttsProvider,
+        tts_provider: 'openai' as const,
         narrator_voice_id: voiceId,
         audio_format: outputFormat,
         audio_bitrate: '128k',
@@ -275,40 +260,17 @@ function DashboardContent() {
               />
             </div>
 
-            {/* TTS Provider */}
+            {/* Narrator Voice */}
             <div className="mt-4">
               <label className="block text-sm font-medium text-white/80 mb-2">
-                TTS Provider
-              </label>
-              <select
-                value={ttsProvider}
-                onChange={(e) => {
-                  const provider = e.target.value as 'openai' | 'elevenlabs'
-                  setTtsProvider(provider)
-                  // Reset voice to first option of new provider
-                  setVoiceId(VOICES[provider][0].id)
-                }}
-                className="input-field"
-              >
-                {TTS_PROVIDERS.map((provider) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.name} - {provider.description}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Voice Selection */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-white/80 mb-2">
-                Voice
+                Narrator Voice
               </label>
               <select
                 value={voiceId}
                 onChange={(e) => setVoiceId(e.target.value)}
                 className="input-field"
               >
-                {VOICES[ttsProvider].map((voice) => (
+                {VOICES.map((voice) => (
                   <option key={voice.id} value={voice.id}>
                     {voice.name} - {voice.description}
                   </option>
@@ -316,10 +278,10 @@ function DashboardContent() {
               </select>
             </div>
 
-            {/* Output Format */}
+            {/* Audio Format */}
             <div className="mt-4">
               <label className="block text-sm font-medium text-white/80 mb-2">
-                Output Format
+                Audio Format
               </label>
               <select
                 value={outputFormat}

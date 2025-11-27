@@ -9,6 +9,35 @@ import { getCurrentUser } from '@/lib/supabaseClient'
 import { getJobs, getDownloadUrl, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
+// Helper to get friendly voice quality name
+const getVoiceQualityName = (provider: string) => {
+  switch (provider) {
+    case 'openai':
+      return 'Standard'
+    case 'elevenlabs':
+      return 'Premium'
+    default:
+      return provider
+  }
+}
+
+// Helper to get friendly voice name
+const getVoiceName = (voiceId: string) => {
+  const voiceNames: Record<string, string> = {
+    'alloy': 'Alloy',
+    'echo': 'Echo',
+    'fable': 'Fable',
+    'onyx': 'Onyx',
+    'nova': 'Nova',
+    'shimmer': 'Shimmer',
+    '21m00Tcm4TlvDq8ikWAM': 'Rachel',
+    'EXAVITQu4vr4xnSDxMaL': 'Bella',
+    'ErXwobaYiN019PkySvjV': 'Antoni',
+    'TxGEqnHWrfWFTfGW9XjX': 'Josh',
+  }
+  return voiceNames[voiceId] || voiceId
+}
+
 function LibraryContent() {
   const router = useRouter()
   const [user, setUser] = useState<{ email?: string } | null>(null)
@@ -138,8 +167,8 @@ function LibraryContent() {
 
                 <div className="text-white/40 text-sm mb-4">
                   <p>Created {formatDate(job.created_at)}</p>
-                  {job.tts_provider && (
-                    <p className="capitalize">{job.tts_provider} - {job.narrator_voice_id}</p>
+                  {job.tts_provider && job.narrator_voice_id && (
+                    <p>{getVoiceQualityName(job.tts_provider)} · {getVoiceName(job.narrator_voice_id)}</p>
                   )}
                 </div>
 

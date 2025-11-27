@@ -9,6 +9,35 @@ import { getCurrentUser } from '@/lib/supabaseClient'
 import { getJob, getDownloadUrl, cancelJob, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
+// Helper to get friendly voice quality name
+const getVoiceQualityName = (provider: string) => {
+  switch (provider) {
+    case 'openai':
+      return 'Standard'
+    case 'elevenlabs':
+      return 'Premium'
+    default:
+      return provider
+  }
+}
+
+// Helper to get friendly voice name
+const getVoiceName = (voiceId: string) => {
+  const voiceNames: Record<string, string> = {
+    'alloy': 'Alloy',
+    'echo': 'Echo',
+    'fable': 'Fable',
+    'onyx': 'Onyx',
+    'nova': 'Nova',
+    'shimmer': 'Shimmer',
+    '21m00Tcm4TlvDq8ikWAM': 'Rachel',
+    'EXAVITQu4vr4xnSDxMaL': 'Bella',
+    'ErXwobaYiN019PkySvjV': 'Antoni',
+    'TxGEqnHWrfWFTfGW9XjX': 'Josh',
+  }
+  return voiceNames[voiceId] || voiceId
+}
+
 function JobDetailContent() {
   const router = useRouter()
   const params = useParams()
@@ -249,23 +278,23 @@ function JobDetailContent() {
               <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {job.tts_provider && (
                   <div>
-                    <dt className="text-white/40 text-sm">TTS Provider</dt>
-                    <dd className="text-white capitalize">
-                      {job.tts_provider}
+                    <dt className="text-white/40 text-sm">Voice Quality</dt>
+                    <dd className="text-white">
+                      {getVoiceQualityName(job.tts_provider)}
                     </dd>
                   </div>
                 )}
 
                 {job.narrator_voice_id && (
                   <div>
-                    <dt className="text-white/40 text-sm">Voice</dt>
-                    <dd className="text-white capitalize">{job.narrator_voice_id}</dd>
+                    <dt className="text-white/40 text-sm">Narrator Voice</dt>
+                    <dd className="text-white">{getVoiceName(job.narrator_voice_id)}</dd>
                   </div>
                 )}
 
                 {job.audio_format && (
                   <div>
-                    <dt className="text-white/40 text-sm">Output Format</dt>
+                    <dt className="text-white/40 text-sm">Audio Format</dt>
                     <dd className="text-white uppercase">{job.audio_format}</dd>
                   </div>
                 )}
@@ -281,11 +310,6 @@ function JobDetailContent() {
                     <dd className="text-white">{formatDate(job.completed_at)}</dd>
                   </div>
                 )}
-
-                <div>
-                  <dt className="text-white/40 text-sm">Job ID</dt>
-                  <dd className="text-white font-mono text-sm">{job.id}</dd>
-                </div>
               </dl>
             </GlassCard>
           </div>
