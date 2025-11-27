@@ -146,7 +146,7 @@ function JobDetailContent() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h1 className="text-2xl font-bold text-white mb-2">
-                    {job.title || job.filename || 'Untitled'}
+                    {job.title || 'Untitled'}
                   </h1>
                   <p className="text-white/60">
                     Created {formatDate(job.created_at)}
@@ -172,12 +172,12 @@ function JobDetailContent() {
                 <div className="mb-4">
                   <div className="flex justify-between text-sm text-white/60 mb-2">
                     <span>Processing your audiobook...</span>
-                    <span>{job.progress || 0}%</span>
+                    <span>{job.progress_percent || 0}%</span>
                   </div>
                   <div className="h-2 bg-af-card rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-af-purple to-af-pink transition-all duration-500"
-                      style={{ width: `${job.progress || 0}%` }}
+                      style={{ width: `${job.progress_percent || 0}%` }}
                     />
                   </div>
                 </div>
@@ -214,12 +214,12 @@ function JobDetailContent() {
               <GlassCard>
                 <h2 className="text-lg font-semibold text-white mb-4">Your Audiobook</h2>
 
-                {job.audio_url ? (
+                {job.audio_path ? (
                   <div className="space-y-4">
                     <audio
                       controls
                       className="w-full"
-                      src={job.audio_url}
+                      src={getDownloadUrl(job.id)}
                     >
                       Your browser does not support the audio element.
                     </audio>
@@ -247,19 +247,26 @@ function JobDetailContent() {
               <h2 className="text-lg font-semibold text-white mb-4">Details</h2>
 
               <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {job.voice_profile && (
+                {job.tts_provider && (
                   <div>
-                    <dt className="text-white/40 text-sm">Voice Profile</dt>
+                    <dt className="text-white/40 text-sm">TTS Provider</dt>
                     <dd className="text-white capitalize">
-                      {job.voice_profile.replace('-', ' ')}
+                      {job.tts_provider}
                     </dd>
                   </div>
                 )}
 
-                {job.output_format && (
+                {job.narrator_voice_id && (
+                  <div>
+                    <dt className="text-white/40 text-sm">Voice</dt>
+                    <dd className="text-white capitalize">{job.narrator_voice_id}</dd>
+                  </div>
+                )}
+
+                {job.audio_format && (
                   <div>
                     <dt className="text-white/40 text-sm">Output Format</dt>
-                    <dd className="text-white uppercase">{job.output_format}</dd>
+                    <dd className="text-white uppercase">{job.audio_format}</dd>
                   </div>
                 )}
 

@@ -10,18 +10,35 @@ import { createClient, getCurrentUser } from '@/lib/supabaseClient'
 import { createJob, getJobs, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
-// Voice profile options
-const VOICE_PROFILES = [
-  { id: 'warm-narrator', name: 'Warm Narrator', description: 'Friendly and engaging' },
-  { id: 'dramatic', name: 'Dramatic', description: 'Expressive and theatrical' },
-  { id: 'professional', name: 'Professional', description: 'Clear and authoritative' },
-  { id: 'storyteller', name: 'Storyteller', description: 'Rich and immersive' },
+// TTS Provider options
+const TTS_PROVIDERS = [
+  { id: 'openai', name: 'OpenAI', description: 'High quality, fast' },
+  { id: 'elevenlabs', name: 'ElevenLabs', description: 'Premium voices' },
 ]
+
+// Voice options by provider
+const VOICES = {
+  openai: [
+    { id: 'alloy', name: 'Alloy', description: 'Neutral and balanced' },
+    { id: 'echo', name: 'Echo', description: 'Deep and resonant' },
+    { id: 'fable', name: 'Fable', description: 'Warm and storytelling' },
+    { id: 'onyx', name: 'Onyx', description: 'Deep and authoritative' },
+    { id: 'nova', name: 'Nova', description: 'Bright and energetic' },
+    { id: 'shimmer', name: 'Shimmer', description: 'Soft and gentle' },
+  ],
+  elevenlabs: [
+    { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', description: 'Calm and professional' },
+    { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella', description: 'Soft and young' },
+    { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', description: 'Well-rounded and versatile' },
+    { id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh', description: 'Deep and narration-focused' },
+  ],
+}
 
 // Output format options
 const OUTPUT_FORMATS = [
   { id: 'mp3', name: 'MP3', description: 'Universal compatibility' },
   { id: 'wav', name: 'WAV', description: 'Lossless quality' },
+  { id: 'flac', name: 'FLAC', description: 'High quality lossless' },
   { id: 'm4b', name: 'M4B', description: 'Audiobook format' },
 ]
 
@@ -43,7 +60,8 @@ function DashboardContent() {
   const [file, setFile] = useState<File | null>(null)
   const [text, setText] = useState('')
   const [title, setTitle] = useState('')
-  const [voiceProfile, setVoiceProfile] = useState('warm-narrator')
+  const [ttsProvider, setTtsProvider] = useState<'openai' | 'elevenlabs'>('openai')
+  const [voiceId, setVoiceId] = useState('alloy')
   const [outputFormat, setOutputFormat] = useState('mp3')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -83,6 +101,7 @@ function DashboardContent() {
     onDrop,
     accept: {
       'text/plain': ['.txt'],
+      'text/markdown': ['.md'],
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
     },
@@ -108,8 +127,12 @@ function DashboardContent() {
     try {
       const payload = {
         title: title || (file?.name.replace(/\.[^/.]+$/, '') || 'Untitled'),
-        voice_profile: voiceProfile,
-        output_format: outputFormat,
+        source_type: inputMode === 'file' ? 'upload' as const : 'paste' as const,
+        mode: 'single_voice' as const,
+        tts_provider: ttsProvider,
+        narrator_voice_id: voiceId,
+        audio_format: outputFormat,
+        audio_bitrate: '128k',
         ...(inputMode === 'text' ? { manuscript_text: text } : {}),
       }
 
@@ -221,7 +244,7 @@ function DashboardContent() {
                         : 'Drag & drop your manuscript, or click to browse'}
                     </p>
                     <p className="text-white/40 text-sm mt-2">
-                      Supports .txt, .docx, .pdf
+                      Supports .txt, .md, .docx, .pdf
                     </p>
                   </div>
                 )}
@@ -252,19 +275,42 @@ function DashboardContent() {
               />
             </div>
 
-            {/* Voice Profile */}
+            {/* TTS Provider */}
             <div className="mt-4">
               <label className="block text-sm font-medium text-white/80 mb-2">
-                Voice Profile
+                TTS Provider
               </label>
               <select
-                value={voiceProfile}
-                onChange={(e) => setVoiceProfile(e.target.value)}
+                value={ttsProvider}
+                onChange={(e) => {
+                  const provider = e.target.value as 'openai' | 'elevenlabs'
+                  setTtsProvider(provider)
+                  // Reset voice to first option of new provider
+                  setVoiceId(VOICES[provider][0].id)
+                }}
                 className="input-field"
               >
-                {VOICE_PROFILES.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name} - {profile.description}
+                {TTS_PROVIDERS.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name} - {provider.description}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Voice Selection */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Voice
+              </label>
+              <select
+                value={voiceId}
+                onChange={(e) => setVoiceId(e.target.value)}
+                className="input-field"
+              >
+                {VOICES[ttsProvider].map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.name} - {voice.description}
                   </option>
                 ))}
               </select>
@@ -335,7 +381,7 @@ function DashboardContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-white font-medium">
-                          {job.title || job.filename || 'Untitled'}
+                          {job.title || 'Untitled'}
                         </p>
                         <p className="text-white/40 text-sm">
                           {formatDate(job.created_at)}

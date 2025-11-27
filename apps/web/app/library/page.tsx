@@ -125,7 +125,7 @@ function LibraryContent() {
               <GlassCard key={job.id} variant="compact" glow>
                 <div className="flex items-start justify-between mb-4">
                   <h3 className="text-lg font-semibold text-white truncate flex-1 mr-2">
-                    {job.title || job.filename || 'Untitled'}
+                    {job.title || 'Untitled'}
                   </h3>
                   <span
                     className={`px-2 py-1 rounded text-xs font-medium shrink-0 ${getStatusColor(
@@ -138,17 +138,17 @@ function LibraryContent() {
 
                 <div className="text-white/40 text-sm mb-4">
                   <p>Created {formatDate(job.created_at)}</p>
-                  {job.voice_profile && (
-                    <p className="capitalize">{job.voice_profile.replace('-', ' ')}</p>
+                  {job.tts_provider && (
+                    <p className="capitalize">{job.tts_provider} - {job.narrator_voice_id}</p>
                   )}
                 </div>
 
                 {/* Audio player for completed jobs */}
-                {job.status === 'completed' && job.audio_url && (
+                {job.status === 'completed' && job.audio_path && (
                   <audio
                     controls
                     className="w-full mb-4 h-10"
-                    src={job.audio_url}
+                    src={getDownloadUrl(job.id)}
                   >
                     Your browser does not support the audio element.
                   </audio>

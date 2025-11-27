@@ -21,10 +21,12 @@ class AuthService:
     def __init__(self):
         """Initialize with Supabase JWT secret"""
         self.supabase_url = os.getenv("SUPABASE_URL")
-        self.jwt_secret = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Using service role key for HS256
+        # JWT Secret is used for verifying tokens (different from service role key)
+        # Find this in Supabase Dashboard → Project Settings → API → JWT Secret
+        self.jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
 
         if not self.supabase_url or not self.jwt_secret:
-            raise ValueError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+            raise ValueError("Missing SUPABASE_URL or SUPABASE_JWT_SECRET")
 
     def verify_token(self, authorization: Optional[str] = Header(None)) -> str:
         """

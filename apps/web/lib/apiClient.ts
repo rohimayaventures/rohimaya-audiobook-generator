@@ -63,24 +63,40 @@ export interface Job {
   id: string
   user_id: string
   status: 'pending' | 'processing' | 'completed' | 'failed'
-  title?: string
-  filename?: string
-  voice_profile?: string
-  output_format?: string
-  progress?: number
+  mode: string
+  title: string
+  author?: string
+  source_type: string
+  source_path?: string
+  tts_provider: string
+  narrator_voice_id: string
+  character_voice_id?: string
+  character_name?: string
+  audio_format: string
+  audio_bitrate: string
+  audio_path?: string
+  duration_seconds?: number
+  file_size_bytes?: number
+  progress_percent?: number
   error_message?: string
-  audio_url?: string
   created_at: string
-  updated_at?: string
+  started_at?: string
   completed_at?: string
 }
 
 export interface CreateJobPayload {
-  title?: string
-  filename?: string
+  title: string
+  author?: string
+  source_type: 'upload' | 'paste' | 'google_drive' | 'url'
+  source_path?: string
   manuscript_text?: string
-  voice_profile?: string
-  output_format?: string
+  mode: 'single_voice' | 'dual_voice'
+  tts_provider: 'openai' | 'elevenlabs' | 'inworld'
+  narrator_voice_id: string
+  character_voice_id?: string
+  character_name?: string
+  audio_format?: string
+  audio_bitrate?: string
 }
 
 export interface HealthResponse {
@@ -126,8 +142,12 @@ export async function createJob(
     const formData = new FormData()
     formData.append('file', file)
     if (payload.title) formData.append('title', payload.title)
-    if (payload.voice_profile) formData.append('voice_profile', payload.voice_profile)
-    if (payload.output_format) formData.append('output_format', payload.output_format)
+    formData.append('source_type', payload.source_type)
+    formData.append('mode', payload.mode)
+    formData.append('tts_provider', payload.tts_provider)
+    formData.append('narrator_voice_id', payload.narrator_voice_id)
+    if (payload.audio_format) formData.append('audio_format', payload.audio_format)
+    if (payload.audio_bitrate) formData.append('audio_bitrate', payload.audio_bitrate)
 
     const response = await fetch(`${baseUrl}/jobs`, {
       method: 'POST',
