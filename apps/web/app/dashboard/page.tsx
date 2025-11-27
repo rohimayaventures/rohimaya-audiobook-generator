@@ -10,14 +10,19 @@ import { createClient, getCurrentUser } from '@/lib/supabaseClient'
 import { createJob, getJobs, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
-// Voice options (OpenAI only for now)
+// Voice options (OpenAI TTS voices)
 const VOICES = [
-  { id: 'alloy', name: 'Alloy', description: 'Neutral and balanced' },
-  { id: 'echo', name: 'Echo', description: 'Deep and resonant' },
-  { id: 'fable', name: 'Fable', description: 'Warm and storytelling' },
-  { id: 'onyx', name: 'Onyx', description: 'Deep and authoritative' },
-  { id: 'nova', name: 'Nova', description: 'Bright and energetic' },
-  { id: 'shimmer', name: 'Shimmer', description: 'Soft and gentle' },
+  { id: 'alloy', name: 'Alloy', description: 'Neutral, versatile - general narration', gender: 'neutral' },
+  { id: 'ash', name: 'Ash', description: 'Warm, conversational - dialogue stories', gender: 'male' },
+  { id: 'ballad', name: 'Ballad', description: 'Smooth, melodic - poetry & literary fiction', gender: 'male' },
+  { id: 'coral', name: 'Coral', description: 'Clear, professional - non-fiction', gender: 'female' },
+  { id: 'echo', name: 'Echo', description: 'Deep, resonant - thrillers & mysteries', gender: 'male' },
+  { id: 'fable', name: 'Fable', description: 'Expressive storyteller - fantasy & children\'s', gender: 'female' },
+  { id: 'onyx', name: 'Onyx', description: 'Deep, authoritative - business & history', gender: 'male' },
+  { id: 'nova', name: 'Nova', description: 'Bright, energetic - self-help & motivation', gender: 'female' },
+  { id: 'sage', name: 'Sage', description: 'Calm, wise - meditation & wellness', gender: 'female' },
+  { id: 'shimmer', name: 'Shimmer', description: 'Soft, gentle - romance & drama', gender: 'female' },
+  { id: 'verse', name: 'Verse', description: 'Dynamic, engaging - adventure & action', gender: 'male' },
 ]
 
 // Output format options

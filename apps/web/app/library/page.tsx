@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { getCurrentUser } from '@/lib/supabaseClient'
-import { getJobs, getDownloadUrl, retryJob, type Job } from '@/lib/apiClient'
+import { getJobs, getJobDownloadUrl, retryJob, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
 // Helper to get friendly voice quality name
@@ -24,12 +24,19 @@ const getVoiceQualityName = (provider: string) => {
 // Helper to get friendly voice name
 const getVoiceName = (voiceId: string) => {
   const voiceNames: Record<string, string> = {
+    // OpenAI voices
     'alloy': 'Alloy',
+    'ash': 'Ash',
+    'ballad': 'Ballad',
+    'coral': 'Coral',
     'echo': 'Echo',
     'fable': 'Fable',
     'onyx': 'Onyx',
     'nova': 'Nova',
+    'sage': 'Sage',
     'shimmer': 'Shimmer',
+    'verse': 'Verse',
+    // ElevenLabs voices (for future use)
     '21m00Tcm4TlvDq8ikWAM': 'Rachel',
     'EXAVITQu4vr4xnSDxMaL': 'Bella',
     'ErXwobaYiN019PkySvjV': 'Antoni',
@@ -45,6 +52,8 @@ function LibraryContent() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'completed' | 'processing' | 'failed'>('all')
   const [retrying, setRetrying] = useState<string | null>(null)
+  const [downloadUrls, setDownloadUrls] = useState<Record<string, string>>({})
+  const [downloading, setDownloading] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -80,6 +89,28 @@ function LibraryContent() {
       alert(err instanceof Error ? err.message : 'Failed to retry job')
     } finally {
       setRetrying(null)
+    }
+  }
+
+  const handleDownload = async (job: Job) => {
+    // Check if we already have the URL cached
+    if (downloadUrls[job.id]) {
+      window.open(downloadUrls[job.id], '_blank')
+      return
+    }
+
+    setDownloading(job.id)
+    try {
+      const { url } = await getJobDownloadUrl(job.id)
+      // Cache the URL
+      setDownloadUrls(prev => ({ ...prev, [job.id]: url }))
+      // Trigger download
+      window.open(url, '_blank')
+    } catch (err) {
+      console.error('Failed to get download URL:', err)
+      alert(err instanceof Error ? err.message : 'Failed to get download URL')
+    } finally {
+      setDownloading(null)
     }
   }
 
@@ -221,15 +252,16 @@ function LibraryContent() {
                   </Link>
 
                   {job.status === 'completed' && (
-                    <a
-                      href={getDownloadUrl(job.id)}
-                      download
-                      className="flex-1"
-                    >
-                      <PrimaryButton className="w-full" size="sm">
-                        Download
+                    <div className="flex-1">
+                      <PrimaryButton
+                        className="w-full"
+                        size="sm"
+                        onClick={() => handleDownload(job)}
+                        disabled={downloading === job.id}
+                      >
+                        {downloading === job.id ? 'Loading...' : 'Download'}
                       </PrimaryButton>
-                    </a>
+                    </div>
                   )}
 
                   {job.status === 'failed' && (

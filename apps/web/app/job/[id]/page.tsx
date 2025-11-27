@@ -24,12 +24,19 @@ const getVoiceQualityName = (provider: string) => {
 // Helper to get friendly voice name
 const getVoiceName = (voiceId: string) => {
   const voiceNames: Record<string, string> = {
+    // OpenAI voices
     'alloy': 'Alloy',
+    'ash': 'Ash',
+    'ballad': 'Ballad',
+    'coral': 'Coral',
     'echo': 'Echo',
     'fable': 'Fable',
     'onyx': 'Onyx',
     'nova': 'Nova',
+    'sage': 'Sage',
     'shimmer': 'Shimmer',
+    'verse': 'Verse',
+    // ElevenLabs voices (for future use)
     '21m00Tcm4TlvDq8ikWAM': 'Rachel',
     'EXAVITQu4vr4xnSDxMaL': 'Bella',
     'ErXwobaYiN019PkySvjV': 'Antoni',
