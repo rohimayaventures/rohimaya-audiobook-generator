@@ -219,3 +219,43 @@ class DualVoicePipeline:
         else:
             print(f"   ⚠️ Assembly failed, but individual parts saved")
             return None
+
+
+def generate_dual_voice_audiobook(
+    manuscript_text: str,
+    output_dir,
+    api_key: str,
+    narrator_voice_id: str,
+    character_voice_id: str,
+    character_name: str,
+) -> list:
+    """
+    Convenience function to generate a dual-voice audiobook.
+
+    Args:
+        manuscript_text: Full book text
+        output_dir: Directory to save output files
+        api_key: ElevenLabs API key
+        narrator_voice_id: Voice ID for narrator
+        character_voice_id: Voice ID for character
+        character_name: Name of the character
+
+    Returns:
+        List of paths to generated audio files
+    """
+    from pathlib import Path
+
+    output_dir = Path(output_dir)
+
+    pipeline = DualVoicePipeline(
+        api_key=api_key,
+        narrator_voice_id=narrator_voice_id,
+        character_voice_id=character_voice_id,
+        character_name=character_name,
+    )
+
+    # Generate chapter by chapter
+    # For now, treat entire text as one chapter
+    result = pipeline.generate_chapter_dual_voice(manuscript_text, output_dir, chapter_number=1)
+
+    return [result] if result else []

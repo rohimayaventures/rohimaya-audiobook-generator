@@ -11,7 +11,6 @@ from openai import OpenAI
 
 from core.chapter_parser import split_into_chapters, sanitize_title_for_filename, clean_text
 from core.advanced_chunker import chunk_chapter_advanced
-from src.merge_audio import merge_audio_files
 
 try:
     from pydub import AudioSegment
@@ -210,3 +209,34 @@ class SingleVoicePipeline:
         print("=" * 60)
 
         return final_paths
+
+
+def generate_single_voice_audiobook(
+    manuscript_text: str,
+    output_dir: Path,
+    api_key: str,
+    voice_id: str,
+    tts_provider: str = "openai"
+) -> List[Path]:
+    """
+    Convenience function to generate a single-voice audiobook.
+
+    Args:
+        manuscript_text: Full book text
+        output_dir: Directory to save output files
+        api_key: API key for the TTS provider
+        voice_id: Voice ID to use for narration
+        tts_provider: TTS provider (currently only 'openai' supported)
+
+    Returns:
+        List of paths to generated audio files
+    """
+    if tts_provider != "openai":
+        raise ValueError(f"Single voice pipeline currently only supports OpenAI, got: {tts_provider}")
+
+    pipeline = SingleVoicePipeline(
+        api_key=api_key,
+        voice_name=voice_id,
+    )
+
+    return pipeline.generate_full_book(manuscript_text, output_dir)
