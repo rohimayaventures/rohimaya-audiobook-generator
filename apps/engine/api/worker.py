@@ -203,16 +203,18 @@ async def worker_loop():
             # Get job from queue (wait if empty)
             job_id = await job_queue.get()
 
-            # Skip if already processing
-            if job_id in processing_jobs:
-                print(f"⏭️ Job {job_id} already processing, skipping")
-                continue
+            try:
+                # Skip if already processing
+                if job_id in processing_jobs:
+                    print(f"⏭️ Job {job_id} already processing, skipping")
+                    continue
 
-            # Process job
-            await process_job(job_id)
+                # Process job
+                await process_job(job_id)
 
-            # Mark task as done
-            job_queue.task_done()
+            finally:
+                # Always mark task as done, even if skipped or errored
+                job_queue.task_done()
 
         except Exception as e:
             print(f"❌ Worker error: {e}")
