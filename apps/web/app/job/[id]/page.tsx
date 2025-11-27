@@ -315,15 +315,19 @@ function JobDetailContent() {
                     </audio>
 
                     <div className="flex gap-4">
-                      <a
-                        href={audioUrl}
-                        download={`${job.title}.mp3`}
+                      <PrimaryButton
                         className="flex-1"
+                        onClick={() => {
+                          const link = document.createElement('a')
+                          link.href = audioUrl
+                          link.download = `${job.title || 'audiobook'}.mp3`
+                          document.body.appendChild(link)
+                          link.click()
+                          document.body.removeChild(link)
+                        }}
                       >
-                        <PrimaryButton className="w-full">
-                          Download audiobook
-                        </PrimaryButton>
-                      </a>
+                        Download audiobook
+                      </PrimaryButton>
                     </div>
                   </div>
                 ) : (

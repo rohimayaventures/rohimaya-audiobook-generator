@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { getCurrentUser } from '@/lib/supabaseClient'
@@ -262,36 +261,34 @@ function LibraryContent() {
 
                 {/* Actions */}
                 <div className="flex gap-2">
-                  <Link href={`/job/${job.id}`} className="flex-1">
-                    <SecondaryButton className="w-full" size="sm">
-                      View details
-                    </SecondaryButton>
-                  </Link>
+                  <SecondaryButton
+                    href={`/job/${job.id}`}
+                    className="flex-1"
+                    size="sm"
+                  >
+                    View details
+                  </SecondaryButton>
 
                   {job.status === 'completed' && (
-                    <div className="flex-1">
-                      <PrimaryButton
-                        className="w-full"
-                        size="sm"
-                        onClick={() => handleDownload(job)}
-                        disabled={downloading === job.id}
-                      >
-                        {downloading === job.id ? 'Loading...' : 'Download'}
-                      </PrimaryButton>
-                    </div>
+                    <PrimaryButton
+                      className="flex-1"
+                      size="sm"
+                      onClick={() => handleDownload(job)}
+                      disabled={downloading === job.id}
+                    >
+                      {downloading === job.id ? 'Loading...' : 'Download'}
+                    </PrimaryButton>
                   )}
 
                   {job.status === 'failed' && (
-                    <div className="flex-1">
-                      <PrimaryButton
-                        className="w-full"
-                        size="sm"
-                        onClick={() => handleRetry(job.id)}
-                        disabled={retrying === job.id}
-                      >
-                        {retrying === job.id ? 'Retrying...' : 'Retry'}
-                      </PrimaryButton>
-                    </div>
+                    <PrimaryButton
+                      className="flex-1"
+                      size="sm"
+                      onClick={() => handleRetry(job.id)}
+                      disabled={retrying === job.id}
+                    >
+                      {retrying === job.id ? 'Retrying...' : 'Retry'}
+                    </PrimaryButton>
                   )}
                 </div>
               </GlassCard>

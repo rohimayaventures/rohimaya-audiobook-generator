@@ -9,6 +9,7 @@ import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { createClient, getCurrentUser } from '@/lib/supabaseClient'
 import { createJob, getJobs, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
+import { getBillingInfo, type BillingInfo, PLANS } from '@/lib/billing'
 
 // Voice options (OpenAI TTS voices)
 const VOICES = [
@@ -45,6 +46,8 @@ function DashboardContent() {
   const [user, setUser] = useState<UserWithMetadata | null>(null)
   const [jobs, setJobs] = useState<Job[]>([])
   const [loadingJobs, setLoadingJobs] = useState(true)
+  const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null)
+  const [loadingBilling, setLoadingBilling] = useState(true)
 
   // Form state
   const [inputMode, setInputMode] = useState<'file' | 'text'>('file')
@@ -56,7 +59,7 @@ function DashboardContent() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  // Fetch user and jobs on mount
+  // Fetch user, jobs, and billing info on mount
   useEffect(() => {
     const fetchData = async () => {
       const currentUser = await getCurrentUser()
@@ -70,6 +73,19 @@ function DashboardContent() {
       }
 
       setLoadingJobs(false)
+
+      // Fetch billing info
+      try {
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.access_token) {
+          const billing = await getBillingInfo(session.access_token)
+          setBillingInfo(billing)
+        }
+      } catch (err) {
+        console.error('Failed to fetch billing info:', err)
+      }
+      setLoadingBilling(false)
     }
 
     fetchData()
@@ -181,6 +197,65 @@ function DashboardContent() {
         title={`Welcome back${user?.user_metadata?.display_name ? `, ${user.user_metadata.display_name}` : (user?.email ? `, ${user.email.split('@')[0]}` : '')}`}
         subtitle="Create and manage your audiobook projects"
       >
+        {/* Plan Info Banner */}
+        {!loadingBilling && billingInfo && (
+          <div className="mb-8 p-4 rounded-xl bg-gradient-to-r from-af-purple/20 to-af-purple-soft/20 border border-af-purple/30">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                {/* Plan Badge */}
+                <div className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                  billingInfo.plan_id === 'free'
+                    ? 'bg-white/10 text-white/80'
+                    : billingInfo.plan_id === 'admin'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-af-purple text-white'
+                }`}>
+                  {billingInfo.plan_name || (PLANS[billingInfo.plan_id]?.name || 'Free')}
+                </div>
+
+                {/* Usage Info */}
+                {billingInfo.plan_id !== 'admin' && billingInfo.entitlements && (
+                  <div className="text-sm text-white/60">
+                    {billingInfo.entitlements.max_projects_per_month === null ? (
+                      <span>Unlimited projects</span>
+                    ) : (
+                      <span>
+                        {billingInfo.usage?.projects_created || 0} / {billingInfo.entitlements.max_projects_per_month} projects this month
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Upgrade/Manage Button */}
+              <div className="flex gap-3">
+                {billingInfo.plan_id === 'free' ? (
+                  <Link
+                    href="/pricing"
+                    className="px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple-soft text-white text-sm font-medium transition-colors"
+                  >
+                    Upgrade Plan
+                  </Link>
+                ) : billingInfo.plan_id !== 'admin' && (
+                  <Link
+                    href="/billing"
+                    className="px-4 py-2 rounded-lg bg-af-card hover:bg-white/10 text-white/80 text-sm font-medium transition-colors"
+                  >
+                    Manage Billing
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {/* Period End Warning */}
+            {billingInfo.cancel_at_period_end && billingInfo.current_period_end && (
+              <div className="mt-3 text-sm text-yellow-400">
+                Your subscription will end on {new Date(billingInfo.current_period_end).toLocaleDateString()}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Create New Audiobook */}
           <GlassCard title="Create a new audiobook">

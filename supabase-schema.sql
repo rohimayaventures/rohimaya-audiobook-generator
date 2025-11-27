@@ -21,22 +21,44 @@ CREATE TABLE IF NOT EXISTS jobs (
     manuscript_path TEXT,           -- R2 path to uploaded manuscript
     manuscript_text TEXT,           -- Direct text input (if not file)
 
+    -- Book metadata (for Findaway packages)
+    author TEXT,
+    narrator_name TEXT,
+    genre TEXT,
+    language TEXT DEFAULT 'en',
+    isbn TEXT,
+    publisher TEXT,
+
     -- Processing configuration
     voice_profile TEXT DEFAULT 'warm-narrator',
+    narrator_voice_id TEXT,         -- TTS voice ID for narrator
+    character_voice_id TEXT,        -- TTS voice ID for character (dual-voice)
+    character_name TEXT,            -- Character name (dual-voice)
+    tts_provider TEXT DEFAULT 'openai',
     output_format TEXT DEFAULT 'mp3',
-    mode TEXT DEFAULT 'single',     -- single, dual, etc.
+    mode TEXT DEFAULT 'single_voice',  -- single_voice, dual_voice, findaway
+
+    -- Findaway-specific options
+    sample_style TEXT DEFAULT 'default',  -- 'default' or 'spicy' for romance
+    cover_vibe TEXT,                -- Visual vibe for AI cover generation
 
     -- Status tracking
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
-    progress INTEGER DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
+    progress_percent DECIMAL(5,2) DEFAULT 0 CHECK (progress_percent >= 0 AND progress_percent <= 100),
     current_step TEXT,
     error_message TEXT,
 
     -- Output
-    audio_path TEXT,                -- R2 path to final audio
+    audio_path TEXT,                -- R2 path to final audio/ZIP
     audio_url TEXT,                 -- Presigned URL (temporary)
     duration_seconds INTEGER,
     file_size_bytes BIGINT,
+
+    -- Findaway package output
+    package_type TEXT,              -- 'findaway' for ZIP packages
+    section_count INTEGER,          -- Number of audio sections
+    has_cover BOOLEAN DEFAULT FALSE,
+    manifest_json TEXT,             -- Full Findaway manifest as JSON
 
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

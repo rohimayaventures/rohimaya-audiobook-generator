@@ -17,7 +17,10 @@ from dotenv import load_dotenv
 
 from .database import db
 from .auth import get_current_user
-from .worker import enqueue_job, worker_loop, get_queue_status
+from .worker import enqueue_job, worker_loop, get_queue_status, recover_pending_jobs, get_worker_health, is_worker_running
+from .billing.routes import router as billing_router
+from .billing.webhook import router as billing_webhook_router
+from .billing.entitlements import get_plan_entitlements, PlanId
 
 # Load environment variables (Railway provides these directly, .env is for local dev)
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
@@ -61,16 +64,25 @@ class JobCreateRequest(BaseModel):
     """Create new audiobook job"""
     title: str = Field(..., min_length=1, max_length=200)
     author: Optional[str] = Field(None, max_length=200)
-    source_type: str = Field(..., description="upload, paste, google_drive, or url")
+    source_type: str = Field(..., description="upload or paste (google_drive and url coming soon)")
     source_path: Optional[str] = Field(None, description="Storage path if uploaded, null if pasted")
     manuscript_text: Optional[str] = Field(None, description="Text content if pasted")
-    mode: str = Field(..., description="single_voice or dual_voice")
-    tts_provider: str = Field(..., description="openai, elevenlabs, or inworld")
+    mode: str = Field(..., description="single_voice, dual_voice, or findaway")
+    tts_provider: str = Field(..., description="openai (elevenlabs and inworld coming soon)")
     narrator_voice_id: str = Field(..., description="Voice ID for narrator")
     character_voice_id: Optional[str] = Field(None, description="Voice ID for character (dual-voice only)")
     character_name: Optional[str] = Field(None, description="Character name (dual-voice only)")
     audio_format: str = Field(default="mp3", description="mp3, wav, flac, or m4b")
     audio_bitrate: str = Field(default="128k", description="128k, 192k, or 320k")
+
+    # Findaway package options
+    narrator_name: Optional[str] = Field(None, description="Narrator name for credits (findaway)")
+    genre: Optional[str] = Field(None, description="Book genre (findaway)")
+    language: Optional[str] = Field(default="en", description="Language code (findaway)")
+    isbn: Optional[str] = Field(None, description="ISBN (findaway)")
+    publisher: Optional[str] = Field(None, description="Publisher name (findaway)")
+    sample_style: Optional[str] = Field(default="default", description="'default' or 'spicy' for romance (findaway)")
+    cover_vibe: Optional[str] = Field(None, description="Visual vibe for AI cover generation (findaway)")
 
     class Config:
         json_schema_extra = {
@@ -95,24 +107,37 @@ class JobResponse(BaseModel):
     status: str
     mode: str
     title: str
-    author: Optional[str]
-    source_type: str
-    source_path: Optional[str]
-    tts_provider: str
-    narrator_voice_id: str
-    character_voice_id: Optional[str]
-    character_name: Optional[str]
-    audio_format: str
-    audio_bitrate: str
-    audio_path: Optional[str]
-    duration_seconds: Optional[int]
-    file_size_bytes: Optional[int]
-    progress_percent: Optional[float]
-    error_message: Optional[str]
+    author: Optional[str] = None
+    source_type: Optional[str] = None
+    source_path: Optional[str] = None
+    tts_provider: Optional[str] = None
+    narrator_voice_id: Optional[str] = None
+    character_voice_id: Optional[str] = None
+    character_name: Optional[str] = None
+    audio_format: Optional[str] = None
+    audio_bitrate: Optional[str] = None
+    audio_path: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    file_size_bytes: Optional[int] = None
+    progress_percent: Optional[float] = None
+    current_step: Optional[str] = None
+    error_message: Optional[str] = None
     retry_count: Optional[int] = 0
     created_at: str
-    started_at: Optional[str]
-    completed_at: Optional[str]
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+    # Findaway-specific fields
+    narrator_name: Optional[str] = None
+    genre: Optional[str] = None
+    language: Optional[str] = None
+    isbn: Optional[str] = None
+    publisher: Optional[str] = None
+    sample_style: Optional[str] = None
+    cover_vibe: Optional[str] = None
+    package_type: Optional[str] = None
+    section_count: Optional[int] = None
+    has_cover: Optional[bool] = None
 
 
 class VoiceInfo(BaseModel):
@@ -188,18 +213,27 @@ async def create_job(
 
     Requires authentication. The job will be queued for processing.
     """
-    # Validate mode
-    if request.mode not in ["single_voice", "dual_voice"]:
+    # Validate source_type - only upload and paste are currently supported
+    if request.source_type not in ["upload", "paste"]:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mode must be 'single_voice' or 'dual_voice'"
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"Source type '{request.source_type}' is not yet implemented. "
+                   f"Currently supported: 'upload' or 'paste'. Google Drive and URL import coming soon."
         )
 
-    # Validate TTS provider
-    if request.tts_provider not in ["openai", "elevenlabs", "inworld"]:
+    # Validate mode
+    if request.mode not in ["single_voice", "dual_voice", "findaway"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="TTS provider must be 'openai', 'elevenlabs', or 'inworld'"
+            detail="Mode must be 'single_voice', 'dual_voice', or 'findaway'"
+        )
+
+    # Validate TTS provider - only OpenAI is currently implemented
+    if request.tts_provider not in ["openai"]:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"TTS provider '{request.tts_provider}' is not yet implemented. "
+                   f"Currently supported: 'openai'. ElevenLabs and Inworld coming soon."
         )
 
     # Validate dual-voice requirements
@@ -208,6 +242,52 @@ async def create_job(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Dual-voice mode requires character_voice_id and character_name"
+            )
+
+    # ==========================================================================
+    # BILLING: Check plan limits before creating job
+    # ==========================================================================
+
+    # Get user info to check for admin role
+    user_info = db.get_user(user_id)
+    user_metadata = {}
+    if user_info and user_info.get("raw_user_meta_data"):
+        user_metadata = user_info["raw_user_meta_data"]
+
+    is_admin = user_metadata.get("role") == "admin"
+
+    if not is_admin:
+        # Get user's billing info
+        billing_info = db.get_user_billing(user_id)
+        plan_id = billing_info.get("plan_id", "free") if billing_info else "free"
+
+        # Get plan entitlements
+        entitlements = get_plan_entitlements(plan_id)
+
+        # Check if user can create more projects this period
+        if entitlements.max_projects_per_month is not None:
+            usage = db.get_user_usage_current_period(user_id)
+            current_projects = usage.get("projects_created", 0) if usage else 0
+
+            if current_projects >= entitlements.max_projects_per_month:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Plan limit reached: {plan_id.title()} plan allows {entitlements.max_projects_per_month} projects per month. "
+                           f"Please upgrade your plan to create more audiobooks."
+                )
+
+        # Check if Findaway mode is allowed
+        if request.mode == "findaway" and not entitlements.findaway_package:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Findaway packages are not available on the Free plan. Please upgrade to Creator or higher."
+            )
+
+        # Check if dual-voice is allowed
+        if request.mode == "dual_voice" and not entitlements.dual_voice:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Dual-voice narration is only available on Author Pro or higher plans."
             )
 
     # Handle pasted text - upload to storage
@@ -238,9 +318,25 @@ async def create_job(
         "audio_format": request.audio_format,
         "audio_bitrate": request.audio_bitrate,
         "progress_percent": 0.0,
+        # Findaway-specific fields
+        "narrator_name": request.narrator_name,
+        "genre": request.genre,
+        "language": request.language,
+        "isbn": request.isbn,
+        "publisher": request.publisher,
+        "sample_style": request.sample_style,
+        "cover_vibe": request.cover_vibe,
     }
 
     job = db.create_job(job_data)
+
+    # Increment usage counter (for non-admin users)
+    if not is_admin:
+        try:
+            db.increment_user_usage(user_id, projects=1, minutes=0)
+        except Exception as e:
+            # Log but don't fail - usage tracking shouldn't block job creation
+            print(f"Warning: Failed to increment usage for user {user_id}: {e}")
 
     # Enqueue job for processing
     await enqueue_job(job["id"])
@@ -401,11 +497,11 @@ async def retry_job(
             detail="You do not have permission to retry this job"
         )
 
-    # Only allow retrying failed jobs
-    if job["status"] != "failed":
+    # Only allow retrying failed or cancelled jobs
+    if job["status"] not in ["failed", "cancelled"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Can only retry failed jobs (current status: {job['status']})"
+            detail=f"Can only retry failed or cancelled jobs (current status: {job['status']})"
         )
 
     # Track retry count (no limit for now during development)
@@ -416,6 +512,7 @@ async def retry_job(
         "status": "pending",
         "error_message": None,
         "progress_percent": 0.0,
+        "current_step": None,
         "started_at": None,
         "completed_at": None,
         "retry_count": current_retry_count + 1,
@@ -543,19 +640,87 @@ async def queue_status() -> QueueStatusResponse:
 
 
 # ============================================================================
+# INCLUDE BILLING ROUTERS
+# ============================================================================
+
+app.include_router(billing_router)
+app.include_router(billing_webhook_router)
+
+
+# ============================================================================
+# WORKER HEALTH ENDPOINT
+# ============================================================================
+
+class WorkerHealthResponse(BaseModel):
+    """Worker health status"""
+    worker_running: bool
+    queued_jobs: int
+    processing_jobs: int
+    processing_job_ids: List[str]
+    total_jobs: int
+    pydub_available: bool
+    temp_directory: str
+
+
+@app.get(
+    "/worker/health",
+    response_model=WorkerHealthResponse,
+    summary="Worker Health Check",
+    tags=["System"],
+)
+async def worker_health() -> WorkerHealthResponse:
+    """
+    Get background worker health status.
+
+    This endpoint does NOT require authentication and can be used for monitoring.
+
+    Returns:
+    - worker_running: Whether the worker loop is active
+    - queued_jobs: Number of jobs waiting in queue
+    - processing_jobs: Number of jobs currently being processed
+    - processing_job_ids: List of job IDs currently being processed
+    - total_jobs: Total jobs in queue + processing
+    """
+    health = get_worker_health()
+    return WorkerHealthResponse(**health)
+
+
+# ============================================================================
 # APPLICATION LIFECYCLE
 # ============================================================================
 
 @app.on_event("startup")
 async def startup_event():
-    """Start background worker"""
-    print("🚀 Rohimaya Audiobook Engine API starting...")
+    """Start background worker and recover pending jobs"""
+    print("🚀 AuthorFlow Studios API starting...")
     print(f"📝 Environment: {os.getenv('ENVIRONMENT', 'development')}")
     print(f"🔗 CORS Origins: {ALLOWED_ORIGINS}")
 
     # Start background worker
     asyncio.create_task(worker_loop())
     print("👷 Background worker started")
+
+    # Wait a moment for worker to initialize
+    await asyncio.sleep(0.5)
+
+    # Recover any pending/processing jobs from before restart
+    print("🔄 Checking for jobs to recover...")
+    recovery_result = await recover_pending_jobs()
+
+    if recovery_result["total_recovered"] > 0:
+        print(f"✅ Recovered {recovery_result['total_recovered']} jobs:")
+        print(f"   - Pending: {recovery_result['recovered_pending']}")
+        print(f"   - Interrupted: {recovery_result['recovered_processing']}")
+        for job_id in recovery_result["recovered_job_ids"]:
+            print(f"   - {job_id}")
+    else:
+        print("✅ No jobs to recover")
+
+    if recovery_result["errors"]:
+        print(f"⚠️ Recovery errors: {len(recovery_result['errors'])}")
+        for error in recovery_result["errors"]:
+            print(f"   - {error}")
+
     print("✅ API ready")
 
 

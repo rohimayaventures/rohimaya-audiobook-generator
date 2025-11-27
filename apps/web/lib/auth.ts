@@ -125,3 +125,31 @@ export async function resetPassword(email: string): Promise<AuthResult> {
 
   return { success: true }
 }
+
+/**
+ * OAuth provider type
+ */
+export type OAuthProvider = 'google' | 'github'
+
+/**
+ * Sign in with OAuth provider (Google, GitHub)
+ * Note: Requires configuring OAuth in Supabase Dashboard:
+ * - Authentication > Providers > Enable Google/GitHub
+ * - Add OAuth credentials from Google Cloud Console / GitHub Developer Settings
+ */
+export async function signInWithOAuth(provider: OAuthProvider): Promise<AuthResult> {
+  const supabase = createClient()
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  })
+
+  if (error) {
+    return { success: false, error: { message: error.message } }
+  }
+
+  return { success: true }
+}

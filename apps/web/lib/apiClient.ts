@@ -88,11 +88,15 @@ export interface Job {
 export interface CreateJobPayload {
   title: string
   author?: string
-  source_type: 'upload' | 'paste' | 'google_drive' | 'url'
+  // Note: Only 'upload' and 'paste' are currently supported
+  // 'google_drive' and 'url' are coming soon
+  source_type: 'upload' | 'paste'
   source_path?: string
   manuscript_text?: string
-  mode: 'single_voice' | 'dual_voice'
-  tts_provider: 'openai' | 'elevenlabs' | 'inworld'
+  mode: 'single_voice' | 'dual_voice' | 'findaway'
+  // Note: Only 'openai' is currently supported
+  // 'elevenlabs' and 'inworld' are coming soon
+  tts_provider: 'openai'
   narrator_voice_id: string
   character_voice_id?: string
   character_name?: string
