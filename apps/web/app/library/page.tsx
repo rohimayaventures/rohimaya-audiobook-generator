@@ -233,19 +233,16 @@ function LibraryContent() {
                   )}
 
                   {job.status === 'failed' && (
-                    <button
-                      onClick={() => handleRetry(job.id)}
-                      disabled={retrying === job.id}
-                      className="flex-1"
-                    >
+                    <div className="flex-1">
                       <PrimaryButton
                         className="w-full"
                         size="sm"
+                        onClick={() => handleRetry(job.id)}
                         disabled={retrying === job.id}
                       >
                         {retrying === job.id ? 'Retrying...' : 'Retry'}
                       </PrimaryButton>
-                    </button>
+                    </div>
                   )}
                 </div>
               </GlassCard>
