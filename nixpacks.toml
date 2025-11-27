@@ -5,17 +5,21 @@
 # Located at repo root so Nixpacks can detect it
 # =============================================================================
 
-# Use Python 3.11 and include ffmpeg for audio processing
+# Providers - tell Nixpacks this is a Python project
+providers = ["python"]
+
+# Use Python 3.11 with pip and include ffmpeg for audio processing
 [phases.setup]
-nixPkgs = ["python311", "ffmpeg"]
+nixPkgs = ["python311", "python311Packages.pip", "ffmpeg"]
 
 # Install Python dependencies from apps/engine/requirements.txt
 [phases.install]
-cmds = ["pip install -r apps/engine/requirements.txt"]
+cmds = ["python -m pip install -r apps/engine/requirements.txt"]
 
 # Start the FastAPI server
 [start]
-cmd = "cd apps/engine && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+cmd = "cd apps/engine && python -m uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 
 [variables]
 PYTHON_VERSION = "3.11"
+PIP_NO_CACHE_DIR = "1"
