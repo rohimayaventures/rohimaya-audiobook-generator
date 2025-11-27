@@ -2,19 +2,21 @@
 Cover Image Generator
 
 Pluggable cover image generation system supporting multiple providers:
-- OpenAI (DALL-E / GPT Image)
-- NanoBanana (future)
+- OpenAI (DALL-E 3)
+- Banana.dev (SDXL / Flux models)
 - Other providers can be added
 
 Environment variables:
-- COVER_IMAGE_PROVIDER: "openai" or "nanobanana" (default: "openai")
+- COVER_IMAGE_PROVIDER: "openai" or "banana" (default: "openai")
 - COVER_IMAGE_MODEL: Model to use (provider-specific)
 - COVER_IMAGE_API_KEY: API key (uses OPENAI_API_KEY as fallback for OpenAI)
+- BANANA_API_KEY: API key for Banana.dev
 """
 
 import os
 import logging
 import base64
+import httpx
 from typing import Dict, Any, Optional
 from pathlib import Path
 
@@ -22,12 +24,12 @@ logger = logging.getLogger(__name__)
 
 # Provider constants
 PROVIDER_OPENAI = "openai"
-PROVIDER_NANOBANANA = "nanobanana"
+PROVIDER_BANANA = "banana"
 
 # Default models per provider
 DEFAULT_MODELS = {
-    PROVIDER_OPENAI: "dall-e-3",  # or "gpt-image-1" when available
-    PROVIDER_NANOBANANA: "default",
+    PROVIDER_OPENAI: "dall-e-3",
+    PROVIDER_BANANA: "sdxl",  # or "flux" for newer models
 }
 
 
@@ -72,8 +74,8 @@ def generate_cover_image(
 
     if provider == PROVIDER_OPENAI:
         return _generate_openai_cover(title, author, genre, vibe, aspect_ratio)
-    elif provider == PROVIDER_NANOBANANA:
-        return _generate_nanobanana_cover(title, author, genre, vibe, aspect_ratio)
+    elif provider == PROVIDER_BANANA:
+        return _generate_banana_cover(title, author, genre, vibe, aspect_ratio)
     else:
         logger.warning(f"Unknown provider '{provider}', falling back to OpenAI")
         return _generate_openai_cover(title, author, genre, vibe, aspect_ratio)
@@ -160,7 +162,7 @@ def _generate_openai_cover(
         raise
 
 
-def _generate_nanobanana_cover(
+def _generate_banana_cover(
     title: str,
     author: Optional[str],
     genre: Optional[str],
@@ -168,17 +170,10 @@ def _generate_nanobanana_cover(
     aspect_ratio: str
 ) -> Dict[str, Any]:
     """
-    Generate cover image using NanoBanana API.
+    Generate cover image using Banana.dev API.
 
-    TODO: Implement when NanoBanana integration is needed.
-
-    This is a placeholder that shows where NanoBanana API calls would go.
-    The expected flow:
-    1. Get COVER_IMAGE_API_KEY for NanoBanana auth
-    2. Build prompt using _build_cover_prompt()
-    3. Make API call to NanoBanana endpoint
-    4. Receive image bytes in response
-    5. Return in same format as OpenAI generator
+    Banana.dev provides serverless GPU inference for models like SDXL and Flux.
+    This is a cost-effective alternative to DALL-E for high-volume generation.
 
     Args:
         title: Book title
@@ -191,51 +186,111 @@ def _generate_nanobanana_cover(
         Cover generation result
 
     Raises:
-        NotImplementedError: NanoBanana integration not yet implemented
+        ValueError: If API key not configured
+        RuntimeError: If API call fails
     """
-    # TODO: NanoBanana API integration
-    #
-    # Expected implementation:
-    #
-    # api_key = os.getenv("COVER_IMAGE_API_KEY")
-    # if not api_key:
-    #     raise ValueError("COVER_IMAGE_API_KEY required for NanoBanana")
-    #
-    # model = os.getenv("COVER_IMAGE_MODEL", DEFAULT_MODELS[PROVIDER_NANOBANANA])
-    # prompt = _build_cover_prompt(title, author, genre, vibe)
-    #
-    # # Make NanoBanana API call
-    # response = requests.post(
-    #     "https://api.nanobanana.com/v1/generate",  # Placeholder URL
-    #     headers={"Authorization": f"Bearer {api_key}"},
-    #     json={
-    #         "prompt": prompt,
-    #         "model": model,
-    #         "width": 1024,
-    #         "height": 1024,
-    #         "format": "png"
-    #     }
-    # )
-    #
-    # if response.status_code != 200:
-    #     raise RuntimeError(f"NanoBanana API error: {response.text}")
-    #
-    # image_bytes = response.content
-    #
-    # return {
-    #     "provider": PROVIDER_NANOBANANA,
-    #     "model": model,
-    #     "image_bytes": image_bytes,
-    #     "width": 1024,
-    #     "height": 1024,
-    #     "prompt_used": prompt,
-    #     "format": "png"
-    # }
+    api_key = os.getenv("BANANA_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "BANANA_API_KEY not configured. "
+            "Set COVER_IMAGE_PROVIDER=openai to use OpenAI DALL-E instead."
+        )
 
-    raise NotImplementedError(
-        "NanoBanana cover generation not yet implemented. "
-        "Set COVER_IMAGE_PROVIDER=openai to use OpenAI instead."
-    )
+    model = os.getenv("COVER_IMAGE_MODEL", DEFAULT_MODELS[PROVIDER_BANANA])
+    prompt = _build_cover_prompt(title, author, genre, vibe)
+
+    # Map aspect ratio to dimensions
+    size_map = {
+        "1:1": (1024, 1024),
+        "16:9": (1344, 768),
+        "9:16": (768, 1344),
+    }
+    width, height = size_map.get(aspect_ratio, (1024, 1024))
+
+    logger.info(f"Using Banana.dev model: {model}")
+    logger.debug(f"Cover prompt: {prompt}")
+
+    # Banana.dev API endpoint
+    # Note: The exact endpoint depends on your deployed model
+    # This uses the standard SDXL inference endpoint
+    banana_url = "https://api.banana.dev/start/v4/"
+
+    # Model-specific payload
+    if model == "flux":
+        # Flux model payload
+        payload = {
+            "prompt": prompt,
+            "negative_prompt": "text, watermark, signature, blurry, low quality, distorted",
+            "width": width,
+            "height": height,
+            "num_inference_steps": 30,
+            "guidance_scale": 7.5,
+        }
+        model_key = os.getenv("BANANA_FLUX_MODEL_KEY", "flux-1-schnell")
+    else:
+        # SDXL model payload
+        payload = {
+            "prompt": prompt,
+            "negative_prompt": "text, watermark, signature, blurry, low quality, distorted, deformed",
+            "width": width,
+            "height": height,
+            "num_inference_steps": 40,
+            "guidance_scale": 7.5,
+            "scheduler": "DPMSolverMultistepScheduler",
+        }
+        model_key = os.getenv("BANANA_SDXL_MODEL_KEY", "sdxl")
+
+    try:
+        with httpx.Client(timeout=120.0) as client:
+            response = client.post(
+                banana_url,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "modelKey": model_key,
+                    "modelInputs": payload,
+                }
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Banana.dev API error: {response.status_code} - {response.text}")
+                raise RuntimeError(f"Banana.dev API error: {response.text}")
+
+            result = response.json()
+
+            # Extract image from response
+            # Banana.dev typically returns base64 encoded image
+            if "modelOutputs" in result and result["modelOutputs"]:
+                output = result["modelOutputs"][0]
+                if "image_base64" in output:
+                    image_b64 = output["image_base64"]
+                elif "image" in output:
+                    image_b64 = output["image"]
+                else:
+                    raise RuntimeError("No image in Banana.dev response")
+
+                image_bytes = base64.b64decode(image_b64)
+
+                return {
+                    "provider": PROVIDER_BANANA,
+                    "model": model,
+                    "image_bytes": image_bytes,
+                    "width": width,
+                    "height": height,
+                    "prompt_used": prompt,
+                    "format": "png",
+                }
+            else:
+                raise RuntimeError("Unexpected Banana.dev response format")
+
+    except httpx.TimeoutException:
+        logger.error("Banana.dev API timeout")
+        raise RuntimeError("Banana.dev API timeout - image generation took too long")
+    except Exception as e:
+        logger.error(f"Banana.dev cover generation failed: {e}")
+        raise
 
 
 def _build_cover_prompt(

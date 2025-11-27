@@ -57,6 +57,30 @@ SPECIAL INSTRUCTION: This is a romance novel and the publisher wants a "spicy" s
 - Highlights the connection between main characters
 - Is still appropriate for a retail preview (not explicit)
 - Creates anticipation for the romantic storyline
+
+For best results, look for:
+1. A first meeting or "meet-cute" scene
+2. A moment of undeniable attraction or tension
+3. Emotional vulnerability between characters
+4. Witty banter or flirtation
+5. A near-kiss or interrupted moment
+"""
+
+ULTRA_SPICY_PROMPT_ADDITION = """
+SPECIAL INSTRUCTION: This is an adult romance novel and the publisher wants a VERY spicy sample that showcases the heat and chemistry. Select an excerpt that:
+- Features intense romantic or sensual tension
+- Showcases the passion between main characters
+- Can include mild steam but should leave readers wanting more
+- Creates STRONG anticipation for the romantic storyline
+
+For best results, look for:
+1. A charged moment of physical awareness
+2. An almost-kiss or interrupted intimate scene
+3. Intense emotional and physical chemistry
+4. Dialogue dripping with tension and subtext
+5. A scene that ends on a cliffhanger or moment of anticipation
+
+The sample should be provocative but not explicit - think "R-rated trailer" energy.
 """
 
 
@@ -65,7 +89,7 @@ def select_retail_sample_excerpt(
     api_key: str,
     target_duration_minutes: float = 4.0,
     average_words_per_minute: int = 150,
-    preferred_style: str = "default",  # "default" | "spicy"
+    preferred_style: str = "default",  # "default" | "spicy" | "ultra_spicy"
     model: str = "gpt-4o-mini"
 ) -> Dict[str, Any]:
     """
@@ -121,6 +145,8 @@ def select_retail_sample_excerpt(
     system_prompt = SAMPLE_SELECTOR_PROMPT
     if preferred_style == "spicy":
         system_prompt += SPICY_PROMPT_ADDITION
+    elif preferred_style == "ultra_spicy":
+        system_prompt += ULTRA_SPICY_PROMPT_ADDITION
 
     client = OpenAI(api_key=api_key)
 

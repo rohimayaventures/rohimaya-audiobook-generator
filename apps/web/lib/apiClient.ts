@@ -88,20 +88,59 @@ export interface Job {
 export interface CreateJobPayload {
   title: string
   author?: string
-  // Note: Only 'upload' and 'paste' are currently supported
-  // 'google_drive' and 'url' are coming soon
-  source_type: 'upload' | 'paste'
+  // Source types: 'upload', 'paste', 'google_drive'
+  source_type: 'upload' | 'paste' | 'google_drive'
   source_path?: string
   manuscript_text?: string
-  mode: 'single_voice' | 'dual_voice' | 'findaway'
-  // Note: Only 'openai' is currently supported
-  // 'elevenlabs' and 'inworld' are coming soon
+  // Modes: single_voice, dual_voice, findaway, multi_character
+  mode: 'single_voice' | 'dual_voice' | 'findaway' | 'multi_character'
+  // TTS provider (openai is primary)
   tts_provider: 'openai'
   narrator_voice_id: string
   character_voice_id?: string
   character_name?: string
   audio_format?: string
   audio_bitrate?: string
+  // Findaway-specific options
+  narrator_name?: string
+  genre?: string
+  language?: string
+  isbn?: string
+  publisher?: string
+  sample_style?: 'default' | 'spicy' | 'ultra_spicy'
+  cover_vibe?: string
+}
+
+export interface CloneJobPayload {
+  title?: string
+  narrator_voice_id?: string
+  mode?: 'single_voice' | 'dual_voice' | 'findaway' | 'multi_character'
+}
+
+export interface SystemStatus {
+  api_version: string
+  environment: string
+  uptime_seconds?: number
+  worker_running: boolean
+  queued_jobs: number
+  processing_jobs: number
+  processing_job_ids: string[]
+  total_jobs: number
+  pending_jobs: number
+  processing_jobs_db: number
+  completed_jobs: number
+  failed_jobs: number
+  total_users: number
+  active_subscriptions: number
+  google_drive_enabled: boolean
+  emotional_tts_enabled: boolean
+  banana_cover_enabled: boolean
+  recent_errors: Array<{
+    job_id: string
+    title: string
+    error: string
+    timestamp: string
+  }>
 }
 
 export interface HealthResponse {
@@ -243,4 +282,21 @@ export async function retryJob(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}/retry`, {
     method: 'POST',
   })
+}
+
+/**
+ * Clone an existing job with optional modifications
+ */
+export async function cloneJob(id: string, payload?: CloneJobPayload): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/clone`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  })
+}
+
+/**
+ * Get system status (admin only)
+ */
+export async function getSystemStatus(): Promise<SystemStatus> {
+  return fetchApi<SystemStatus>('/admin/status')
 }

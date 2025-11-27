@@ -527,6 +527,111 @@ async def retry_job(
     return JobResponse(**updated_job)
 
 
+class CloneJobRequest(BaseModel):
+    """Request to clone a job with optional modifications"""
+    title: Optional[str] = Field(None, description="New title (or keep original)")
+    narrator_voice_id: Optional[str] = Field(None, description="New narrator voice (or keep original)")
+    mode: Optional[str] = Field(None, description="New mode (or keep original)")
+
+
+@app.post(
+    "/jobs/{job_id}/clone",
+    response_model=JobResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Clone Job",
+    tags=["Jobs"],
+)
+async def clone_job(
+    job_id: str,
+    request: Optional[CloneJobRequest] = None,
+    user_id: str = Depends(get_current_user)
+) -> JobResponse:
+    """
+    Clone an existing job with optional modifications.
+
+    Creates a new job based on an existing one, copying:
+    - Source manuscript (source_path)
+    - Title, author, and metadata
+    - Voice and audio settings
+
+    Optionally override: title, narrator_voice_id, mode
+
+    The new job will be queued for processing immediately.
+
+    Requires authentication. User can only clone their own jobs.
+    """
+    # Get original job
+    original_job = db.get_job(job_id)
+
+    if not original_job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    # Verify ownership
+    if original_job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to clone this job"
+        )
+
+    # Build new job data from original
+    new_job_data = {
+        "user_id": user_id,
+        "status": "pending",
+        # Copy from original (required fields)
+        "title": original_job.get("title", "Untitled"),
+        "source_type": original_job.get("source_type", "upload"),
+        "source_path": original_job.get("source_path"),
+        "mode": original_job.get("mode", "single_voice"),
+        "tts_provider": original_job.get("tts_provider", "openai"),
+        "narrator_voice_id": original_job.get("narrator_voice_id", "alloy"),
+        # Copy optional fields
+        "author": original_job.get("author"),
+        "character_voice_id": original_job.get("character_voice_id"),
+        "character_name": original_job.get("character_name"),
+        "audio_format": original_job.get("audio_format", "mp3"),
+        "audio_bitrate": original_job.get("audio_bitrate", "128k"),
+        "narrator_name": original_job.get("narrator_name"),
+        "genre": original_job.get("genre"),
+        "language": original_job.get("language", "en"),
+        "isbn": original_job.get("isbn"),
+        "publisher": original_job.get("publisher"),
+        "sample_style": original_job.get("sample_style", "default"),
+        "cover_vibe": original_job.get("cover_vibe"),
+        # Reset progress fields
+        "progress_percent": 0.0,
+        "retry_count": 0,
+    }
+
+    # Apply overrides from request
+    if request:
+        if request.title:
+            new_job_data["title"] = request.title
+        if request.narrator_voice_id:
+            new_job_data["narrator_voice_id"] = request.narrator_voice_id
+        if request.mode:
+            # Validate mode
+            if request.mode not in ["single_voice", "dual_voice", "findaway", "multi_character"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid mode. Must be: single_voice, dual_voice, findaway, or multi_character"
+                )
+            new_job_data["mode"] = request.mode
+
+    # Add clone metadata
+    new_job_data["title"] = f"{new_job_data['title']} (Clone)"
+
+    # Create new job
+    new_job = db.create_job(new_job_data)
+
+    # Enqueue for processing
+    await enqueue_job(new_job["id"])
+
+    return JobResponse(**new_job)
+
+
 @app.delete(
     "/jobs/{job_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -683,6 +788,169 @@ async def worker_health() -> WorkerHealthResponse:
     """
     health = get_worker_health()
     return WorkerHealthResponse(**health)
+
+
+# ============================================================================
+# ADMIN SYSTEM STATUS PANEL
+# ============================================================================
+
+class SystemStatusResponse(BaseModel):
+    """Complete system status for admin panel"""
+    # API Status
+    api_version: str
+    environment: str
+    uptime_seconds: Optional[int] = None
+
+    # Worker Status
+    worker_running: bool
+    queued_jobs: int
+    processing_jobs: int
+    processing_job_ids: List[str]
+
+    # Database Stats
+    total_jobs: int
+    pending_jobs: int
+    processing_jobs_db: int
+    completed_jobs: int
+    failed_jobs: int
+
+    # User Stats
+    total_users: int
+    active_subscriptions: int
+
+    # Feature Flags
+    google_drive_enabled: bool
+    emotional_tts_enabled: bool
+    banana_cover_enabled: bool
+
+    # Recent Errors
+    recent_errors: List[Dict[str, Any]]
+
+
+@app.get(
+    "/admin/status",
+    response_model=SystemStatusResponse,
+    summary="System Status Panel (Admin Only)",
+    tags=["Admin"],
+)
+async def get_system_status(
+    user_id: str = Depends(get_current_user)
+) -> SystemStatusResponse:
+    """
+    Get complete system status for admin dashboard.
+
+    Requires authentication and admin role.
+
+    Returns comprehensive system information including:
+    - API and worker status
+    - Job statistics
+    - User statistics
+    - Feature flag status
+    - Recent errors
+    """
+    # Check admin role
+    user_info = db.get_user(user_id)
+    user_metadata = {}
+    if user_info and user_info.get("raw_user_meta_data"):
+        user_metadata = user_info["raw_user_meta_data"]
+
+    is_admin = user_metadata.get("role") == "admin"
+
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+
+    # Get worker health
+    worker_health_data = get_worker_health()
+
+    # Get job statistics from database
+    try:
+        job_stats = db.client.table("jobs").select("status", count="exact").execute()
+
+        # Count by status
+        all_jobs = db.client.table("jobs").select("id, status").execute()
+        status_counts = {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
+        for job in all_jobs.data or []:
+            job_status = job.get("status", "unknown")
+            if job_status in status_counts:
+                status_counts[job_status] += 1
+
+        total_jobs = len(all_jobs.data) if all_jobs.data else 0
+    except Exception as e:
+        print(f"Error fetching job stats: {e}")
+        total_jobs = 0
+        status_counts = {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
+
+    # Get user statistics
+    try:
+        # Count users with active billing
+        billing_data = db.client.table("user_billing").select("id, status").execute()
+        active_subs = len([b for b in (billing_data.data or []) if b.get("status") == "active"])
+
+        # Count total users (estimate from billing records)
+        total_users = len(billing_data.data) if billing_data.data else 0
+    except Exception as e:
+        print(f"Error fetching user stats: {e}")
+        total_users = 0
+        active_subs = 0
+
+    # Get recent errors (last 10 failed jobs)
+    try:
+        failed_jobs = db.client.table("jobs").select(
+            "id, title, error_message, completed_at"
+        ).eq("status", "failed").order(
+            "completed_at", desc=True
+        ).limit(10).execute()
+
+        recent_errors = [
+            {
+                "job_id": job.get("id"),
+                "title": job.get("title"),
+                "error": job.get("error_message"),
+                "timestamp": job.get("completed_at"),
+            }
+            for job in (failed_jobs.data or [])
+        ]
+    except Exception as e:
+        print(f"Error fetching recent errors: {e}")
+        recent_errors = []
+
+    # Check feature flags
+    from .google_drive import is_google_drive_configured
+
+    return SystemStatusResponse(
+        # API Status
+        api_version="0.3.0",
+        environment=os.getenv("ENVIRONMENT", "development"),
+        uptime_seconds=None,  # Would need to track startup time
+
+        # Worker Status
+        worker_running=worker_health_data.get("worker_running", False),
+        queued_jobs=worker_health_data.get("queued_jobs", 0),
+        processing_jobs=worker_health_data.get("processing_jobs", 0),
+        processing_job_ids=worker_health_data.get("processing_job_ids", []),
+
+        # Database Stats
+        total_jobs=total_jobs,
+        pending_jobs=status_counts["pending"],
+        processing_jobs_db=status_counts["processing"],
+        completed_jobs=status_counts["completed"],
+        failed_jobs=status_counts["failed"],
+
+        # User Stats
+        total_users=total_users,
+        active_subscriptions=active_subs,
+
+        # Feature Flags
+        google_drive_enabled=is_google_drive_configured(),
+        emotional_tts_enabled=os.getenv("EMOTIONAL_TTS_ENABLED", "true").lower() == "true",
+        banana_cover_enabled=bool(os.getenv("BANANA_API_KEY")),
+
+        # Recent Errors
+        recent_errors=recent_errors,
+    )
 
 
 # ============================================================================

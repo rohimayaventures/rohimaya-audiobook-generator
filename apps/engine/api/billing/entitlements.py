@@ -35,9 +35,14 @@ class Entitlements:
 
     # Feature flags
     findaway_package: bool
-    retail_sample: Union[bool, str]  # True, False, or "advanced"
-    cover_generation: Union[bool, str]  # True, False, or "premium"
+    retail_sample: Union[bool, str]  # True, False, "advanced", or "spicy"
+    cover_generation: Union[bool, str]  # True, False, "premium", or "banana"
     dual_voice: bool
+
+    # Phase 3 features
+    multi_character_voice: bool  # Multi-character voice with auto-detection
+    emotional_tts: bool  # Emotional TTS instructions
+    google_drive_import: bool  # Import from Google Drive
 
     # Queue priority
     faster_queue: bool
@@ -58,6 +63,9 @@ class Entitlements:
             "retail_sample": self.retail_sample,
             "cover_generation": self.cover_generation,
             "dual_voice": self.dual_voice,
+            "multi_character_voice": self.multi_character_voice,
+            "emotional_tts": self.emotional_tts,
+            "google_drive_import": self.google_drive_import,
             "faster_queue": self.faster_queue,
             "team_members": self.team_members,
             "team_access": self.team_access,
@@ -85,6 +93,9 @@ PLAN_ENTITLEMENTS: Dict[str, Entitlements] = {
         retail_sample=True,  # Basic retail sample
         cover_generation=False,
         dual_voice=False,
+        multi_character_voice=False,
+        emotional_tts=False,
+        google_drive_import=False,
         faster_queue=False,
         team_members=0,
         team_access=False,
@@ -103,6 +114,9 @@ PLAN_ENTITLEMENTS: Dict[str, Entitlements] = {
         retail_sample=True,
         cover_generation=True,
         dual_voice=False,
+        multi_character_voice=False,
+        emotional_tts=True,  # Basic emotional TTS
+        google_drive_import=True,
         faster_queue=False,
         team_members=0,
         team_access=False,
@@ -113,15 +127,18 @@ PLAN_ENTITLEMENTS: Dict[str, Entitlements] = {
     # AUTHOR PRO TIER ($79/month)
     # - For serious authors with multiple books
     # - Unlimited projects, up to 6 hours each
-    # - Dual voice support
+    # - Dual voice + multi-character support
     # -------------------------------------------------------------------------
     PlanId.AUTHOR_PRO.value: Entitlements(
         max_projects_per_month=None,  # Unlimited
         max_minutes_per_book=360,  # 6 hours
         findaway_package=True,
-        retail_sample="advanced",  # AI-powered sample selection
+        retail_sample="spicy",  # AI-powered + spicy sample selection
         cover_generation="premium",  # Higher quality covers
         dual_voice=True,
+        multi_character_voice=True,
+        emotional_tts=True,
+        google_drive_import=True,
         faster_queue=True,
         team_members=0,
         team_access=False,
@@ -137,9 +154,12 @@ PLAN_ENTITLEMENTS: Dict[str, Entitlements] = {
         max_projects_per_month=None,  # Unlimited
         max_minutes_per_book=None,  # Unlimited
         findaway_package=True,
-        retail_sample="advanced",
-        cover_generation="premium",
+        retail_sample="spicy",  # Full spicy sample features
+        cover_generation="banana",  # Premium covers with Banana.dev option
         dual_voice=True,
+        multi_character_voice=True,
+        emotional_tts=True,
+        google_drive_import=True,
         faster_queue=True,
         team_members=5,  # Up to 5 team members
         team_access=True,
@@ -156,9 +176,12 @@ PLAN_ENTITLEMENTS: Dict[str, Entitlements] = {
         max_projects_per_month=None,  # Unlimited
         max_minutes_per_book=None,  # Unlimited
         findaway_package=True,
-        retail_sample="advanced",
-        cover_generation="premium",
+        retail_sample="spicy",
+        cover_generation="banana",
         dual_voice=True,
+        multi_character_voice=True,
+        emotional_tts=True,
+        google_drive_import=True,
         faster_queue=True,
         team_members=None,  # Unlimited
         team_access=True,
@@ -259,6 +282,8 @@ PLAN_DISPLAY_INFO = {
             "Findaway-ready packages",
             "AI cover generation",
             "Retail sample selection",
+            "Emotional TTS",
+            "Google Drive import",
             "Email support",
         ],
     },
@@ -271,8 +296,10 @@ PLAN_DISPLAY_INFO = {
             "Unlimited audiobooks",
             "Up to 6 hours per book",
             "Dual-voice narration",
-            "Advanced retail samples",
+            "Multi-character voices",
+            "Spicy retail samples",
             "Premium cover generation",
+            "Emotional TTS",
             "Priority queue",
             "Priority support",
         ],
@@ -285,6 +312,7 @@ PLAN_DISPLAY_INFO = {
         "features": [
             "Everything in Author Pro",
             "Unlimited book length",
+            "Banana.dev cover generation",
             "Team access (5 members)",
             "Dedicated support",
             "Custom branding options",
