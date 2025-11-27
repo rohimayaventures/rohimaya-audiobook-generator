@@ -1,176 +1,154 @@
-'use client'
+import { FeatureCard } from '@/components/ui'
+import { PrimaryButton, SecondaryButton } from '@/components/ui'
+import { Footer } from '@/components/layout'
 
-import Link from 'next/link'
-
-export default function Home() {
+/**
+ * Landing Page - AuthorFlow Studios
+ * Public page with hero section and feature highlights
+ * Theme: Midnight Indigo Glow - Magical Tech
+ */
+export default function LandingPage() {
   return (
-    <main style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-      textAlign: 'center',
-    }}>
-      <div style={{
-        maxWidth: '800px',
-        backgroundColor: 'white',
-        padding: '3rem',
-        borderRadius: '12px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-      }}>
-        {/* Logo/Brand */}
-        <div style={{
-          fontSize: '3rem',
-          fontWeight: 'bold',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          marginBottom: '1rem',
-        }}>
-          AuthorFlow
+    <div className="min-h-screen flex flex-col">
+      {/* Navigation - Simple for landing */}
+      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-af-midnight/60 border-b border-af-card-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <span className="font-serif text-xl font-bold text-gradient">
+              AuthorFlow
+            </span>
+            <div className="flex items-center gap-4">
+              <a
+                href="/login"
+                className="text-sm font-medium text-white/80 hover:text-white transition-colors"
+              >
+                Log in
+              </a>
+              <a
+                href="/signup"
+                className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
+              >
+                Sign up
+              </a>
+            </div>
+          </div>
         </div>
+      </nav>
 
-        {/* Tagline */}
-        <h1 style={{
-          fontSize: '2rem',
-          fontWeight: '600',
-          color: '#1a202c',
-          marginBottom: '1rem',
-        }}>
-          Audiobook Engine
-        </h1>
+      {/* Main Content */}
+      <main className="flex-1">
+        {/* Hero Section */}
+        <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-4xl mx-auto text-center">
+            {/* Logo/Brand */}
+            <h1 className="font-serif text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 text-glow">
+              AuthorFlow Studios
+            </h1>
 
-        <p style={{
-          fontSize: '1.25rem',
-          color: '#4a5568',
-          marginBottom: '2rem',
-          lineHeight: '1.6',
-        }}>
-          Turn your manuscript into a studio-ready audiobook in one workflow.
-        </p>
+            {/* Tagline */}
+            <p className="text-xl sm:text-2xl text-af-lavender mb-4">
+              Transform your manuscript into a studio-ready audiobook.
+            </p>
 
-        {/* Features */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '1.5rem',
-          marginBottom: '2.5rem',
-          textAlign: 'left',
-        }}>
-          <FeatureCard
-            icon="🎙️"
-            title="Multi-Voice Support"
-            description="Single narrator or dual-voice character dialogues"
-          />
-          <FeatureCard
-            icon="⚡"
-            title="Fast Processing"
-            description="Parallel chunk processing for quick turnaround"
-          />
-          <FeatureCard
-            icon="🎯"
-            title="Studio Quality"
-            description="Professional-grade TTS with multiple providers"
-          />
-        </div>
+            {/* Supporting text */}
+            <p className="text-lg text-white/60 mb-10 max-w-2xl mx-auto">
+              AI-powered audiobook production with premium voices, multi-narrator support,
+              and professional-grade audio quality.
+            </p>
 
-        {/* CTA Buttons */}
-        <div style={{
-          display: 'flex',
-          gap: '1rem',
-          justifyContent: 'center',
-          flexWrap: 'wrap',
-        }}>
-          <Link
-            href="/app"
-            style={{
-              padding: '0.75rem 2rem',
-              fontSize: '1.125rem',
-              fontWeight: '600',
-              color: 'white',
-              backgroundColor: '#667eea',
-              border: 'none',
-              borderRadius: '8px',
-              textDecoration: 'none',
-              cursor: 'pointer',
-              transition: 'background-color 0.2s',
-            }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#5a67d8'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#667eea'}
-          >
-            Launch App →
-          </Link>
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+              <PrimaryButton href="/signup" size="lg">
+                Get started
+              </PrimaryButton>
+              <SecondaryButton href="/login" size="lg">
+                Log in
+              </SecondaryButton>
+            </div>
 
-          <button
-            style={{
-              padding: '0.75rem 2rem',
-              fontSize: '1.125rem',
-              fontWeight: '600',
-              color: '#667eea',
-              backgroundColor: 'white',
-              border: '2px solid #667eea',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#f7fafc'
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = 'white'
-            }}
-          >
-            Join Waitlist
-          </button>
-        </div>
+            {/* Note text */}
+            <p className="text-sm text-white/40">
+              No complex setup. Just upload, choose voices, and generate.
+            </p>
+          </div>
+        </section>
 
-        {/* Footer Note */}
-        <p style={{
-          marginTop: '2rem',
-          fontSize: '0.875rem',
-          color: '#718096',
-        }}>
-          Powered by OpenAI, ElevenLabs, and Inworld TTS
-        </p>
-      </div>
-    </main>
-  )
-}
+        {/* Feature Cards Section */}
+        <section className="py-20 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-2xl font-bold text-white text-center mb-12">
+              Everything you need to create audiobooks
+            </h2>
 
-// Feature Card Component
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: string
-  title: string
-  description: string
-}) {
-  return (
-    <div style={{
-      padding: '1rem',
-      backgroundColor: '#f7fafc',
-      borderRadius: '8px',
-    }}>
-      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{icon}</div>
-      <h3 style={{
-        fontSize: '1rem',
-        fontWeight: '600',
-        color: '#2d3748',
-        marginBottom: '0.25rem',
-      }}>
-        {title}
-      </h3>
-      <p style={{
-        fontSize: '0.875rem',
-        color: '#718096',
-        lineHeight: '1.5',
-      }}>
-        {description}
-      </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <FeatureCard
+                icon="🎙️"
+                title="Multi-Voice Narration"
+                description="Create engaging audiobooks with single narrator or dual-voice character dialogues. Perfect for fiction with distinct character voices."
+              />
+              <FeatureCard
+                icon="🎧"
+                title="Studio-Ready Audio"
+                description="Professional-grade TTS powered by OpenAI, ElevenLabs, and premium cloud providers. Export in MP3, WAV, or audiobook formats."
+              />
+              <FeatureCard
+                icon="✨"
+                title="Built for Authors & Studios"
+                description="No audio engineering expertise needed. Upload your manuscript, configure your settings, and let us handle the rest."
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* How it works section */}
+        <section className="py-20 px-4 sm:px-6 lg:px-8 border-t border-af-card-border">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-2xl font-bold text-white mb-12">
+              How it works
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-af-purple/20 flex items-center justify-center text-af-lavender text-xl font-bold mb-4">
+                  1
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Upload</h3>
+                <p className="text-white/60 text-sm">
+                  Drop your manuscript file or paste your text directly
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-af-purple/20 flex items-center justify-center text-af-lavender text-xl font-bold mb-4">
+                  2
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Configure</h3>
+                <p className="text-white/60 text-sm">
+                  Choose your voice profile and output format
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-af-purple/20 flex items-center justify-center text-af-lavender text-xl font-bold mb-4">
+                  3
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Generate</h3>
+                <p className="text-white/60 text-sm">
+                  Download your studio-ready audiobook
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-12">
+              <PrimaryButton href="/signup">
+                Start creating now
+              </PrimaryButton>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <Footer />
     </div>
   )
 }

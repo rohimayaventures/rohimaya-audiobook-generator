@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   AuthorFlow Studios - Global Styles
+   Theme: Midnight Indigo Glow
+   ============================================ */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-af-midnight text-white font-sans antialiased;
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbar for webkit browsers */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-af-ink;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-af-purple/50 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-af-purple/70;
+  }
+}
+
+@layer components {
+  /* Glassmorphism card base */
+  .glass {
+    @apply bg-af-card backdrop-blur-xl border border-af-card-border rounded-2xl;
+  }
+
+  /* Glowing border effect */
+  .glow-border {
+    position: relative;
+  }
+
+  .glow-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.5), rgba(236, 72, 153, 0.5));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .glow-border:hover::before {
+    opacity: 1;
+  }
+
+  /* Primary button gradient */
+  .btn-primary {
+    @apply px-6 py-3 rounded-xl font-semibold text-white;
+    @apply bg-gradient-to-r from-af-purple to-af-pink;
+    @apply shadow-glow hover:shadow-glow-lg;
+    @apply transition-all duration-300 ease-out;
+    @apply hover:scale-105 active:scale-95;
+  }
+
+  /* Secondary/glass button */
+  .btn-secondary {
+    @apply px-6 py-3 rounded-xl font-semibold text-white;
+    @apply bg-af-card backdrop-blur-xl border border-af-card-border;
+    @apply hover:bg-white/10 hover:border-af-purple-soft/50;
+    @apply transition-all duration-300 ease-out;
+  }
+
+  /* Input field styling */
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl;
+    @apply bg-af-card backdrop-blur-xl border border-af-card-border;
+    @apply text-white placeholder-white/40;
+    @apply focus:outline-none focus:border-af-purple-soft focus:ring-1 focus:ring-af-purple-soft;
+    @apply transition-all duration-200;
+  }
+
+  /* Particle animation container */
+  .particles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    animation: particle-float 15s infinite ease-in-out;
+  }
+
+  @keyframes particle-float {
+    0%, 100% {
+      transform: translateY(0) translateX(0);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-100vh) translateX(50px);
+      opacity: 0;
+    }
+  }
+}
+
+@layer utilities {
+  /* Text gradient utility */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-af-purple-soft to-af-pink-soft;
+  }
+
+  /* Glow text effect */
+  .text-glow {
+    text-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.3);
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
