@@ -52,7 +52,23 @@ async function fetchApi<T>(
     throw new Error(error.detail || error.message || `HTTP ${response.status}`)
   }
 
-  return response.json()
+  // Handle empty responses (e.g., 204 No Content)
+  const contentLength = response.headers.get('content-length')
+  if (response.status === 204 || contentLength === '0') {
+    return {} as T
+  }
+
+  // Try to parse JSON, return empty object if body is empty
+  const text = await response.text()
+  if (!text || text.trim() === '') {
+    return {} as T
+  }
+
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    return {} as T
+  }
 }
 
 // ============================================
