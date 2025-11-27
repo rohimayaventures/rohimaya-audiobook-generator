@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 def split_into_chapters(book_text: str) -> List[Dict]:
     """
     Split book text into chapters based on "CHAPTER N" headers.
+    If no chapter headers found, treats entire text as a single chapter.
 
     Returns list of dicts:
         {
@@ -62,6 +63,15 @@ def split_into_chapters(book_text: str) -> List[Dict]:
 
     # Sort by index just in case
     chapters.sort(key=lambda c: c["index"])
+
+    # If no chapters found, treat entire text as a single chapter
+    if not chapters and book_text.strip():
+        chapters.append({
+            "index": 1,
+            "title": "Chapter 1",
+            "text": book_text.strip()
+        })
+
     return chapters
 
 
