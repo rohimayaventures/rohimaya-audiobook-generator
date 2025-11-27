@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { getCurrentUser } from '@/lib/supabaseClient'
-import { getJobs, getDownloadUrl, type Job } from '@/lib/apiClient'
+import { getJobs, getDownloadUrl, retryJob, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
 // Helper to get friendly voice quality name
@@ -44,6 +44,7 @@ function LibraryContent() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'completed' | 'processing' | 'failed'>('all')
+  const [retrying, setRetrying] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -66,6 +67,20 @@ function LibraryContent() {
   const handleLogout = async () => {
     await signOut()
     router.push('/')
+  }
+
+  const handleRetry = async (jobId: string) => {
+    setRetrying(jobId)
+    try {
+      const updatedJob = await retryJob(jobId)
+      // Update job in local state
+      setJobs(jobs.map(j => j.id === jobId ? updatedJob : j))
+    } catch (err) {
+      console.error('Failed to retry job:', err)
+      alert(err instanceof Error ? err.message : 'Failed to retry job')
+    } finally {
+      setRetrying(null)
+    }
   }
 
   // Filter jobs
@@ -183,6 +198,20 @@ function LibraryContent() {
                   </audio>
                 )}
 
+                {/* Error message for failed jobs */}
+                {job.status === 'failed' && job.error_message && (
+                  <p className="text-red-400 text-sm mb-4 line-clamp-2">
+                    {job.error_message}
+                  </p>
+                )}
+
+                {/* Retry count badge */}
+                {job.retry_count && job.retry_count > 0 && (
+                  <p className="text-white/40 text-xs mb-2">
+                    Retried {job.retry_count}x
+                  </p>
+                )}
+
                 {/* Actions */}
                 <div className="flex gap-2">
                   <Link href={`/job/${job.id}`} className="flex-1">
@@ -201,6 +230,22 @@ function LibraryContent() {
                         Download
                       </PrimaryButton>
                     </a>
+                  )}
+
+                  {job.status === 'failed' && (
+                    <button
+                      onClick={() => handleRetry(job.id)}
+                      disabled={retrying === job.id}
+                      className="flex-1"
+                    >
+                      <PrimaryButton
+                        className="w-full"
+                        size="sm"
+                        disabled={retrying === job.id}
+                      >
+                        {retrying === job.id ? 'Retrying...' : 'Retry'}
+                      </PrimaryButton>
+                    </button>
                   )}
                 </div>
               </GlassCard>

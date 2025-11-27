@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { getCurrentUser } from '@/lib/supabaseClient'
-import { getJob, getDownloadUrl, cancelJob, type Job } from '@/lib/apiClient'
+import { getJob, getDownloadUrl, cancelJob, retryJob, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
 // Helper to get friendly voice quality name
@@ -48,6 +48,7 @@ function JobDetailContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [cancelling, setCancelling] = useState(false)
+  const [retrying, setRetrying] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -98,6 +99,20 @@ function JobDetailContent() {
       setError(err instanceof Error ? err.message : 'Failed to cancel job')
     }
     setCancelling(false)
+  }
+
+  const handleRetry = async () => {
+    if (!job) return
+
+    setRetrying(true)
+    setError('')
+    try {
+      const updatedJob = await retryJob(job.id)
+      setJob(updatedJob)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to retry job')
+    }
+    setRetrying(false)
   }
 
   // Format date
@@ -229,12 +244,30 @@ function JobDetailContent() {
             )}
 
             {/* Error */}
-            {job.status === 'failed' && job.error_message && (
+            {job.status === 'failed' && (
               <GlassCard>
                 <h2 className="text-lg font-semibold text-red-400 mb-4">Error</h2>
-                <p className="text-white/80 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-                  {job.error_message}
-                </p>
+                {job.error_message && (
+                  <p className="text-white/80 bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
+                    {job.error_message}
+                  </p>
+                )}
+                {job.retry_count && job.retry_count > 0 && (
+                  <p className="text-white/40 text-sm mb-4">
+                    This job has been retried {job.retry_count} time{job.retry_count > 1 ? 's' : ''}
+                  </p>
+                )}
+                <div className="flex gap-4">
+                  <PrimaryButton
+                    onClick={handleRetry}
+                    disabled={retrying}
+                  >
+                    {retrying ? 'Retrying...' : 'Retry this job'}
+                  </PrimaryButton>
+                  <SecondaryButton href="/dashboard">
+                    Create new job
+                  </SecondaryButton>
+                </div>
               </GlassCard>
             )}
 

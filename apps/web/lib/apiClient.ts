@@ -79,6 +79,7 @@ export interface Job {
   file_size_bytes?: number
   progress_percent?: number
   error_message?: string
+  retry_count?: number
   created_at: string
   started_at?: string
   completed_at?: string
@@ -228,5 +229,14 @@ export async function cancelJob(id: string): Promise<{ message: string }> {
 export async function deleteJob(id: string): Promise<{ message: string }> {
   return fetchApi<{ message: string }>(`/jobs/${id}`, {
     method: 'DELETE',
+  })
+}
+
+/**
+ * Retry a failed job
+ */
+export async function retryJob(id: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/retry`, {
+    method: 'POST',
   })
 }

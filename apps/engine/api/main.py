@@ -109,6 +109,7 @@ class JobResponse(BaseModel):
     file_size_bytes: Optional[int]
     progress_percent: Optional[float]
     error_message: Optional[str]
+    retry_count: Optional[int] = 0
     created_at: str
     started_at: Optional[str]
     completed_at: Optional[str]
@@ -351,6 +352,74 @@ async def download_audiobook(
 
     # Redirect to download URL
     return RedirectResponse(url=download_url)
+
+
+@app.post(
+    "/jobs/{job_id}/retry",
+    response_model=JobResponse,
+    summary="Retry Failed Job",
+    tags=["Jobs"],
+)
+async def retry_job(
+    job_id: str,
+    user_id: str = Depends(get_current_user)
+) -> JobResponse:
+    """
+    Retry a failed job
+
+    Resets the job status to 'pending' and re-enqueues it for processing.
+    Only works on jobs with status 'failed'.
+
+    Requires authentication. User can only retry their own jobs.
+    """
+    job = db.get_job(job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    # Verify ownership
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to retry this job"
+        )
+
+    # Only allow retrying failed jobs
+    if job["status"] != "failed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Can only retry failed jobs (current status: {job['status']})"
+        )
+
+    # Check max retries (optional limit)
+    MAX_RETRIES = 3
+    current_retry_count = job.get("retry_count", 0)
+    if current_retry_count >= MAX_RETRIES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum retry limit ({MAX_RETRIES}) reached for this job"
+        )
+
+    # Reset job for retry
+    updates = {
+        "status": "pending",
+        "error_message": None,
+        "progress_percent": 0.0,
+        "started_at": None,
+        "completed_at": None,
+        "retry_count": current_retry_count + 1,
+    }
+
+    # Update job in database
+    updated_job = db.update_job(job_id, updates)
+
+    # Re-enqueue for processing
+    await enqueue_job(job_id)
+
+    return JobResponse(**updated_job)
 
 
 @app.delete(
