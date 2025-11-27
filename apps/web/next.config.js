@@ -9,7 +9,7 @@ const nextConfig = {
   },
 
   // Output configuration for deployment
-  output: 'standalone',
+  // output: 'standalone',  // Disabled for Vercel - Vercel handles this automatically
 
   // Disable automatic static optimization for /app routes (needed for dynamic features)
   // experimental: {
