@@ -19,9 +19,10 @@ from .database import db
 from .auth import get_current_user
 from .worker import enqueue_job, worker_loop, get_queue_status
 
-# Load environment variables from env/.env
+# Load environment variables (Railway provides these directly, .env is for local dev)
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
-load_dotenv(dotenv_path=env_path)
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 # Initialize FastAPI app
 app = FastAPI(
