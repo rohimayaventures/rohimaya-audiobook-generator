@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from openai import OpenAI
 
-from ..core.chapter_parser import split_into_chapters, sanitize_title_for_filename, clean_text
-from ..core.advanced_chunker import chunk_chapter_advanced
-from ..src.merge_audio import merge_audio_files
+from core.chapter_parser import split_into_chapters, sanitize_title_for_filename, clean_text
+from core.advanced_chunker import chunk_chapter_advanced
+from src.merge_audio import merge_audio_files
 
 try:
     from pydub import AudioSegment
