@@ -1,0 +1,21 @@
+# =============================================================================
+# NIXPACKS CONFIGURATION FOR RAILWAY DEPLOYMENT
+# =============================================================================
+# This file tells Railway/Nixpacks how to build and run the Python backend
+# Located at repo root so Nixpacks can detect it
+# =============================================================================
+
+# Use Python 3.11 and include ffmpeg for audio processing
+[phases.setup]
+nixPkgs = ["python311", "ffmpeg"]
+
+# Install Python dependencies from apps/engine/requirements.txt
+[phases.install]
+cmds = ["pip install -r apps/engine/requirements.txt"]
+
+# Start the FastAPI server
+[start]
+cmd = "cd apps/engine && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+
+[variables]
+PYTHON_VERSION = "3.11"
