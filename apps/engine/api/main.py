@@ -499,8 +499,11 @@ if __name__ == "__main__":
     port = int(os.getenv("API_PORT", "8000"))
     reload = os.getenv("ENVIRONMENT", "development") == "development"
 
+    # Use api.main:app for proper package resolution
+    # Run from apps/engine directory: python -m api.main
+    # Or: cd apps/engine && uvicorn api.main:app
     uvicorn.run(
-        "main:app",
+        "api.main:app",
         host=host,
         port=port,
         reload=reload,

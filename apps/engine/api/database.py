@@ -244,5 +244,23 @@ class SupabaseDB:
             return False
 
 
-# Global database instance
-db = SupabaseDB()
+# Global database instance (lazy initialization)
+_db_instance: SupabaseDB = None
+
+
+def get_db() -> SupabaseDB:
+    """Get or create database instance (lazy initialization)"""
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = SupabaseDB()
+    return _db_instance
+
+
+# Backwards compatible alias
+class _LazyDB:
+    """Lazy proxy for SupabaseDB to maintain backwards compatibility"""
+    def __getattr__(self, name):
+        return getattr(get_db(), name)
+
+
+db = _LazyDB()

@@ -111,8 +111,16 @@ class AuthService:
             return None
 
 
-# Global auth service
-auth_service = AuthService()
+# Global auth service (lazy initialization)
+_auth_instance: AuthService = None
+
+
+def get_auth_service() -> AuthService:
+    """Get or create auth service instance (lazy initialization)"""
+    global _auth_instance
+    if _auth_instance is None:
+        _auth_instance = AuthService()
+    return _auth_instance
 
 
 def get_current_user(authorization: Optional[str] = Header(None)) -> str:
@@ -133,7 +141,7 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> str:
     Raises:
         HTTPException: 401 if not authenticated
     """
-    return auth_service.verify_token(authorization)
+    return get_auth_service().verify_token(authorization)
 
 
 def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[str]:
@@ -146,4 +154,4 @@ def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Op
     Returns:
         User ID or None
     """
-    return auth_service.verify_token_optional(authorization)
+    return get_auth_service().verify_token_optional(authorization)

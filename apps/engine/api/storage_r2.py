@@ -322,5 +322,23 @@ class R2Storage:
             return False
 
 
-# Global R2 storage instance
-r2 = R2Storage()
+# Global R2 storage instance (lazy initialization)
+_r2_instance: R2Storage = None
+
+
+def get_r2() -> R2Storage:
+    """Get or create R2 storage instance (lazy initialization)"""
+    global _r2_instance
+    if _r2_instance is None:
+        _r2_instance = R2Storage()
+    return _r2_instance
+
+
+# Backwards compatible alias
+class _LazyR2:
+    """Lazy proxy for R2Storage to maintain backwards compatibility"""
+    def __getattr__(self, name):
+        return getattr(get_r2(), name)
+
+
+r2 = _LazyR2()
