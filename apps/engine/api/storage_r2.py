@@ -11,9 +11,11 @@ import boto3
 from botocore.exceptions import ClientError
 from botocore.client import Config
 
-# Load environment variables
+# Load environment variables (only for local development)
+# In production (Railway), env vars are set directly
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
-load_dotenv(dotenv_path=env_path)
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 
 class R2Storage:

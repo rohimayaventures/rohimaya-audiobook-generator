@@ -10,9 +10,11 @@ from dotenv import load_dotenv
 from fastapi import Header, HTTPException, status
 from jose import jwt, JWTError
 
-# Load environment variables
+# Load environment variables (only for local development)
+# In production (Railway), env vars are set directly
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
-load_dotenv(dotenv_path=env_path)
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 
 class AuthService:

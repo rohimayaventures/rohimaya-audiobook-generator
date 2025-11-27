@@ -13,9 +13,11 @@ from supabase import create_client, Client
 # Import R2 storage client
 from .storage_r2 import r2
 
-# Load environment variables
+# Load environment variables (only for local development)
+# In production (Railway), env vars are set directly
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
-load_dotenv(dotenv_path=env_path)
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 
 class SupabaseDB:
