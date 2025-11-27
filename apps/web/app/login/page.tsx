@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { GlassCard } from '@/components/ui'
 import { PrimaryButton, SecondaryButton } from '@/components/ui'
@@ -13,11 +13,21 @@ import { signIn, signInWithMagicLink, signInWithOAuth, OAuthProvider } from '@/l
  */
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [magicLinkSent, setMagicLinkSent] = useState(false)
+  const [infoMessage, setInfoMessage] = useState('')
+
+  // Check for session expired message from middleware redirect
+  useEffect(() => {
+    const message = searchParams.get('message')
+    if (message === 'session_expired') {
+      setInfoMessage('Your session has expired due to inactivity. Please log in again.')
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -103,6 +113,16 @@ export default function LoginPage() {
               <h1 className="text-2xl font-bold text-white text-center mb-6">
                 Log in to your account
               </h1>
+
+              {/* Session expired info message */}
+              {infoMessage && (
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm flex items-start gap-2">
+                  <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>{infoMessage}</span>
+                </div>
+              )}
 
               {/* Error message */}
               {error && (

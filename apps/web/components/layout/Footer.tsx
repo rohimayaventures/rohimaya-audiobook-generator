@@ -17,9 +17,11 @@ export function Footer({ user }: FooterProps = {}) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* Brand */}
           <div className="md:col-span-2">
-            <h3 className="font-serif text-xl font-bold text-gradient mb-3">
-              AuthorFlow Studios
-            </h3>
+            <a href={user ? "/dashboard" : "/"} className="inline-block">
+              <h3 className="font-serif text-xl font-bold text-gradient mb-3 hover:opacity-80 transition-opacity">
+                AuthorFlow Studios
+              </h3>
+            </a>
             <p className="text-sm text-white/60 max-w-sm">
               Transform your manuscripts into studio-ready audiobooks with AI-powered narration.
             </p>

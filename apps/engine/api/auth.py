@@ -1,14 +1,20 @@
 """
 Authentication and Authorization
 JWT token verification for Supabase Auth
+
+Security features:
+- JWT token verification with HS256
+- Token expiration validation
+- Audience claim verification
 """
 
 import os
+import time
 from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import Header, HTTPException, status
-from jose import jwt, JWTError
+from jose import jwt, JWTError, ExpiredSignatureError
 
 # Load environment variables (only for local development)
 # In production (Railway), env vars are set directly
@@ -74,6 +80,11 @@ class AuthService:
                 self.jwt_secret,
                 algorithms=["HS256"],
                 audience="authenticated",
+                options={
+                    "verify_exp": True,  # Verify expiration
+                    "verify_aud": True,  # Verify audience
+                    "verify_iat": True,  # Verify issued at
+                }
             )
 
             user_id = payload.get("sub")
@@ -83,8 +94,20 @@ class AuthService:
                     detail="Invalid token: missing user ID",
                 )
 
+            # Additional security: Check if token is about to expire (within 5 minutes)
+            exp = payload.get("exp")
+            if exp and (exp - time.time()) < 300:
+                # Token expires in less than 5 minutes - still valid but client should refresh
+                pass  # Could add a response header to indicate token refresh needed
+
             return user_id
 
+        except ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired. Please log in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         except JWTError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
