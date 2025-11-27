@@ -281,10 +281,10 @@ export default function ContactPage() {
               Prefer email? Reach us directly at
             </p>
             <a
-              href="mailto:support@rohimayapublishing.com"
+              href="mailto:support@authorflowstudios.rohimayapublishing.com"
               className="text-af-purple-soft hover:text-af-lavender transition-colors text-lg"
             >
-              support@rohimayapublishing.com
+              support@authorflowstudios.rohimayapublishing.com
             </a>
           </div>
         </div>

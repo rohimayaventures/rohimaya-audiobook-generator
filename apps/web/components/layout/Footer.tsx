@@ -74,7 +74,7 @@ export function Footer({ user }: FooterProps = {}) {
                 </a>
               </li>
               <li>
-                <a href="mailto:support@rohimayapublishing.com" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
+                <a href="mailto:support@authorflowstudios.rohimayapublishing.com" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
                   Email Support
                 </a>
               </li>

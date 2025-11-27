@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const brevoApiKey = process.env.BREVO_API_KEY
-    const contactEmail = process.env.CONTACT_EMAIL || 'support@rohimayapublishing.com'
+    const contactEmail = process.env.CONTACT_EMAIL || 'support@authorflowstudios.rohimayapublishing.com'
 
     if (!brevoApiKey) {
       console.error('BREVO_API_KEY not configured')
