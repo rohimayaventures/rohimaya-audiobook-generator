@@ -63,6 +63,23 @@ function LibraryContent() {
       try {
         const jobsList = await getJobs()
         setJobs(jobsList)
+
+        // Pre-fetch download URLs for completed jobs
+        const completedJobs = jobsList.filter(j => j.status === 'completed' && j.audio_path)
+        const urlPromises = completedJobs.map(async (job) => {
+          try {
+            const { url } = await getJobDownloadUrl(job.id)
+            return { id: job.id, url }
+          } catch {
+            return null
+          }
+        })
+        const results = await Promise.all(urlPromises)
+        const urls: Record<string, string> = {}
+        results.forEach(r => {
+          if (r) urls[r.id] = r.url
+        })
+        setDownloadUrls(urls)
       } catch (err) {
         console.error('Failed to fetch jobs:', err)
       }
@@ -219,11 +236,11 @@ function LibraryContent() {
                 </div>
 
                 {/* Audio player for completed jobs */}
-                {job.status === 'completed' && job.audio_path && (
+                {job.status === 'completed' && job.audio_path && downloadUrls[job.id] && (
                   <audio
                     controls
                     className="w-full mb-4 h-10"
-                    src={getDownloadUrl(job.id)}
+                    src={downloadUrls[job.id]}
                   >
                     Your browser does not support the audio element.
                   </audio>
