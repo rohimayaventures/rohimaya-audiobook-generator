@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { getCurrentUser } from '@/lib/supabaseClient'
-import { getJob, getDownloadUrl, cancelJob, retryJob, type Job } from '@/lib/apiClient'
+import { getJob, getJobDownloadUrl, cancelJob, retryJob, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
 // Helper to get friendly voice quality name
@@ -49,6 +49,7 @@ function JobDetailContent() {
   const [error, setError] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [retrying, setRetrying] = useState(false)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,6 +59,16 @@ function JobDetailContent() {
       try {
         const jobData = await getJob(jobId)
         setJob(jobData)
+
+        // Fetch audio URL if job is completed
+        if (jobData.status === 'completed' && jobData.audio_path) {
+          try {
+            const { url } = await getJobDownloadUrl(jobId)
+            setAudioUrl(url)
+          } catch (err) {
+            console.error('Failed to get audio URL:', err)
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load job')
       }
@@ -73,6 +84,16 @@ function JobDetailContent() {
         try {
           const jobData = await getJob(jobId)
           setJob(jobData)
+
+          // Fetch audio URL when job completes
+          if (jobData.status === 'completed' && jobData.audio_path && !audioUrl) {
+            try {
+              const { url } = await getJobDownloadUrl(jobId)
+              setAudioUrl(url)
+            } catch (err) {
+              console.error('Failed to get audio URL:', err)
+            }
+          }
         } catch (err) {
           // Ignore polling errors
         }
@@ -80,7 +101,7 @@ function JobDetailContent() {
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [jobId, job?.status])
+  }, [jobId, job?.status, audioUrl])
 
   const handleLogout = async () => {
     await signOut()
@@ -276,20 +297,20 @@ function JobDetailContent() {
               <GlassCard>
                 <h2 className="text-lg font-semibold text-white mb-4">Your Audiobook</h2>
 
-                {job.audio_path ? (
+                {audioUrl ? (
                   <div className="space-y-4">
                     <audio
                       controls
                       className="w-full"
-                      src={getDownloadUrl(job.id)}
+                      src={audioUrl}
                     >
                       Your browser does not support the audio element.
                     </audio>
 
                     <div className="flex gap-4">
                       <a
-                        href={getDownloadUrl(job.id)}
-                        download
+                        href={audioUrl}
+                        download={`${job.title}.mp3`}
                         className="flex-1"
                       >
                         <PrimaryButton className="w-full">
@@ -299,7 +320,7 @@ function JobDetailContent() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-white/60">Audio file is being prepared...</p>
+                  <p className="text-white/60">Loading audio...</p>
                 )}
               </GlassCard>
             )}

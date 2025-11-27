@@ -311,19 +311,27 @@ async def list_jobs(
     return [JobResponse(**job) for job in jobs]
 
 
+class DownloadUrlResponse(BaseModel):
+    """Response containing presigned download URL"""
+    url: str
+    expires_in: int = 3600
+
+
 @app.get(
     "/jobs/{job_id}/download",
-    summary="Download Audiobook",
+    response_model=DownloadUrlResponse,
+    summary="Get Download URL",
     tags=["Jobs"],
 )
-async def download_audiobook(
+async def get_download_url(
     job_id: str,
     user_id: str = Depends(get_current_user)
-):
+) -> DownloadUrlResponse:
     """
-    Get download URL for completed audiobook
+    Get presigned download URL for completed audiobook
 
-    Returns a redirect to a signed Supabase Storage URL (expires in 1 hour)
+    Returns a JSON object with the signed URL (expires in 1 hour).
+    Use this URL directly in audio players and download links.
     """
     job = db.get_job(job_id)
 
@@ -347,11 +355,17 @@ async def download_audiobook(
             detail=f"Job is not completed (current status: {job['status']})"
         )
 
+    # Check if audio_path exists
+    if not job.get("audio_path"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audio file not found for this job"
+        )
+
     # Get signed download URL
     download_url = db.get_download_url(job["audio_path"], expires_in=3600)
 
-    # Redirect to download URL
-    return RedirectResponse(url=download_url)
+    return DownloadUrlResponse(url=download_url, expires_in=3600)
 
 
 @app.post(
