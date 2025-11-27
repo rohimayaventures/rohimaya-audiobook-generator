@@ -1,6 +1,10 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import { FeatureCard } from '@/components/ui'
 import { PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Footer } from '@/components/layout'
+import { getCurrentUser } from '@/lib/supabaseClient'
 
 /**
  * Landing Page - AuthorFlow Studios
@@ -8,6 +12,16 @@ import { Footer } from '@/components/layout'
  * Theme: Midnight Indigo Glow - Magical Tech
  */
 export default function LandingPage() {
+  const [user, setUser] = useState<{ email?: string } | null>(null)
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const currentUser = await getCurrentUser()
+      setUser(currentUser)
+    }
+    checkUser()
+  }, [])
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Navigation - Simple for landing */}
@@ -18,18 +32,29 @@ export default function LandingPage() {
               AuthorFlow
             </span>
             <div className="flex items-center gap-4">
-              <a
-                href="/login"
-                className="text-sm font-medium text-white/80 hover:text-white transition-colors"
-              >
-                Log in
-              </a>
-              <a
-                href="/signup"
-                className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
-              >
-                Sign up
-              </a>
+              {user ? (
+                <a
+                  href="/dashboard"
+                  className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
+                >
+                  Go to Dashboard
+                </a>
+              ) : (
+                <>
+                  <a
+                    href="/login"
+                    className="text-sm font-medium text-white/80 hover:text-white transition-colors"
+                  >
+                    Log in
+                  </a>
+                  <a
+                    href="/signup"
+                    className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
+                  >
+                    Sign up
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -148,7 +173,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <Footer />
+      <Footer user={user} />
     </div>
   )
 }

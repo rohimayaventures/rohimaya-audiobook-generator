@@ -180,7 +180,7 @@ function LibraryContent() {
         )}
       </PageShell>
 
-      <Footer />
+      <Footer user={user} />
     </>
   )
 }

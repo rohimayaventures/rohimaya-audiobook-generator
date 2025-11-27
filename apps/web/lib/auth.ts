@@ -14,9 +14,9 @@ export interface AuthResult {
 }
 
 /**
- * Sign up with email and password
+ * Sign up with email, password, and optional display name
  */
-export async function signUp(email: string, password: string): Promise<AuthResult> {
+export async function signUp(email: string, password: string, displayName?: string): Promise<AuthResult> {
   const supabase = createClient()
 
   const { error } = await supabase.auth.signUp({
@@ -24,6 +24,28 @@ export async function signUp(email: string, password: string): Promise<AuthResul
     password,
     options: {
       emailRedirectTo: `${window.location.origin}/auth/callback`,
+      data: {
+        display_name: displayName || email.split('@')[0],
+      },
+    },
+  })
+
+  if (error) {
+    return { success: false, error: { message: error.message } }
+  }
+
+  return { success: true }
+}
+
+/**
+ * Update user profile (display name)
+ */
+export async function updateProfile(displayName: string): Promise<AuthResult> {
+  const supabase = createClient()
+
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      display_name: displayName,
     },
   })
 

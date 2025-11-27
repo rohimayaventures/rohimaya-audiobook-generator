@@ -285,7 +285,7 @@ function JobDetailContent() {
         ) : null}
       </PageShell>
 
-      <Footer />
+      <Footer user={user} />
     </>
   )
 }

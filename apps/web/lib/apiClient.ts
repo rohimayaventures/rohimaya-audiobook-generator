@@ -3,6 +3,8 @@
  * Handles all communication with the backend FastAPI server
  */
 
+import { getSession } from './supabaseClient'
+
 const getBaseUrl = () => {
   const url = process.env.NEXT_PUBLIC_ENGINE_API_URL
   if (!url) {
@@ -13,7 +15,15 @@ const getBaseUrl = () => {
 }
 
 /**
- * Generic fetch wrapper with error handling
+ * Get the current user's access token from Supabase session
+ */
+async function getAuthToken(): Promise<string | null> {
+  const session = await getSession()
+  return session?.access_token || null
+}
+
+/**
+ * Generic fetch wrapper with error handling and authentication
  */
 async function fetchApi<T>(
   endpoint: string,
@@ -22,10 +32,17 @@ async function fetchApi<T>(
   const baseUrl = getBaseUrl()
   const url = `${baseUrl}${endpoint}`
 
+  // Get auth token
+  const token = await getAuthToken()
+  if (!token) {
+    throw new Error('Not authenticated. Please log in.')
+  }
+
   const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
       ...options.headers,
     },
   })
@@ -78,10 +95,15 @@ export interface HealthResponse {
 // ============================================
 
 /**
- * Check API health
+ * Check API health (no auth required)
  */
 export async function checkHealth(): Promise<HealthResponse> {
-  return fetchApi<HealthResponse>('/health')
+  const baseUrl = getBaseUrl()
+  const response = await fetch(`${baseUrl}/health`)
+  if (!response.ok) {
+    throw new Error('Health check failed')
+  }
+  return response.json()
 }
 
 /**
@@ -93,6 +115,12 @@ export async function createJob(
 ): Promise<Job> {
   const baseUrl = getBaseUrl()
 
+  // Get auth token
+  const token = await getAuthToken()
+  if (!token) {
+    throw new Error('Not authenticated. Please log in.')
+  }
+
   // If there's a file, use FormData
   if (file) {
     const formData = new FormData()
@@ -103,6 +131,9 @@ export async function createJob(
 
     const response = await fetch(`${baseUrl}/jobs`, {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
       body: formData,
     })
 

@@ -18,14 +18,37 @@ const playfair = Playfair_Display({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://authorflowstudios.rohimayapublishing.com'),
-  title: 'AuthorFlow Studios - AI Audiobook Generator',
+  title: {
+    default: 'AuthorFlow Studios - AI Audiobook Generator',
+    template: '%s | AuthorFlow Studios',
+  },
   description: 'Transform your manuscript into a studio-ready audiobook with AI-powered voices, multi-narrator support, and professional-grade audio quality.',
-  keywords: ['audiobook', 'text-to-speech', 'TTS', 'AI', 'manuscript', 'audio', 'book'],
+  keywords: ['audiobook', 'text-to-speech', 'TTS', 'AI', 'manuscript', 'audio', 'book', 'author', 'publishing'],
   authors: [{ name: 'AuthorFlow Studios' }],
+  creator: 'Pagade Ventures',
+  publisher: 'AuthorFlow Studios',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/favicon.svg',
+  },
   openGraph: {
-    title: 'AuthorFlow Studios',
-    description: 'Transform your manuscript into a studio-ready audiobook',
+    title: 'AuthorFlow Studios - AI Audiobook Generator',
+    description: 'Transform your manuscript into a studio-ready audiobook with AI-powered voices, multi-narrator support, and professional-grade audio quality.',
     type: 'website',
+    siteName: 'AuthorFlow Studios',
+    url: 'https://authorflowstudios.rohimayapublishing.com',
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AuthorFlow Studios - AI Audiobook Generator',
+    description: 'Transform your manuscript into a studio-ready audiobook with AI-powered voices.',
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 }
 

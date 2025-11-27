@@ -13,6 +13,7 @@ import { signUp } from '@/lib/auth'
  */
 export default function SignupPage() {
   const router = useRouter()
+  const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -23,6 +24,12 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    // Validate display name
+    if (!displayName.trim()) {
+      setError('Please enter your name')
+      return
+    }
 
     // Validate password match
     if (password !== confirmPassword) {
@@ -38,7 +45,7 @@ export default function SignupPage() {
 
     setLoading(true)
 
-    const result = await signUp(email, password)
+    const result = await signUp(email, password, displayName.trim())
 
     if (result.success) {
       setSuccess(true)
@@ -94,6 +101,22 @@ export default function SignupPage() {
                   {error}
                 </div>
               )}
+
+              {/* Display Name */}
+              <div>
+                <label htmlFor="displayName" className="block text-sm font-medium text-white/80 mb-2">
+                  Your Name
+                </label>
+                <input
+                  id="displayName"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="input-field"
+                  placeholder="John Doe"
+                  required
+                />
+              </div>
 
               {/* Email */}
               <div>

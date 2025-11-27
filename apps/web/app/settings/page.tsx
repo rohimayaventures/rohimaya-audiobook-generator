@@ -5,17 +5,31 @@ import { useRouter } from 'next/navigation'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { getCurrentUser } from '@/lib/supabaseClient'
-import { signOut } from '@/lib/auth'
+import { signOut, updateProfile } from '@/lib/auth'
+
+interface UserWithMetadata {
+  email?: string
+  id?: string
+  user_metadata?: {
+    display_name?: string
+  }
+}
 
 function SettingsContent() {
   const router = useRouter()
-  const [user, setUser] = useState<{ email?: string; id?: string } | null>(null)
+  const [user, setUser] = useState<UserWithMetadata | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [displayName, setDisplayName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     const fetchUser = async () => {
       const currentUser = await getCurrentUser()
-      setUser(currentUser)
+      setUser(currentUser as UserWithMetadata)
+      if (currentUser?.user_metadata?.display_name) {
+        setDisplayName(currentUser.user_metadata.display_name)
+      }
     }
     fetchUser()
   }, [])
@@ -26,12 +40,82 @@ function SettingsContent() {
     router.push('/')
   }
 
+  const handleSaveProfile = async () => {
+    if (!displayName.trim()) {
+      setSaveMessage({ type: 'error', text: 'Name cannot be empty' })
+      return
+    }
+
+    setSaving(true)
+    setSaveMessage(null)
+
+    const result = await updateProfile(displayName.trim())
+
+    if (result.success) {
+      setSaveMessage({ type: 'success', text: 'Profile updated successfully!' })
+      // Update local user state
+      setUser(prev => prev ? {
+        ...prev,
+        user_metadata: { ...prev.user_metadata, display_name: displayName.trim() }
+      } : null)
+    } else {
+      setSaveMessage({ type: 'error', text: result.error?.message || 'Failed to update profile' })
+    }
+
+    setSaving(false)
+  }
+
+  // Get display name for UI
+  const getUserDisplayName = () => {
+    return user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'User'
+  }
+
   return (
     <>
       <Navbar user={user} onLogout={handleLogout} />
 
       <PageShell title="Settings" subtitle="Manage your account">
         <div className="max-w-2xl space-y-6">
+          {/* Profile */}
+          <GlassCard title="Profile">
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="displayName" className="block text-sm text-white/40 mb-1">
+                  Display Name
+                </label>
+                <input
+                  id="displayName"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="input-field"
+                  placeholder="Your name"
+                />
+                <p className="text-white/30 text-xs mt-1">
+                  This is how you&apos;ll appear throughout the app
+                </p>
+              </div>
+
+              {saveMessage && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  saveMessage.type === 'success'
+                    ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                    : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                }`}>
+                  {saveMessage.text}
+                </div>
+              )}
+
+              <PrimaryButton
+                onClick={handleSaveProfile}
+                disabled={saving}
+                size="sm"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </PrimaryButton>
+            </div>
+          </GlassCard>
+
           {/* Account Info */}
           <GlassCard title="Account">
             <div className="space-y-4">
@@ -108,7 +192,7 @@ function SettingsContent() {
         </div>
       </PageShell>
 
-      <Footer />
+      <Footer user={user} />
     </>
   )
 }

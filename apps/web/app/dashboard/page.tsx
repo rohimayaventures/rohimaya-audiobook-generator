@@ -25,9 +25,16 @@ const OUTPUT_FORMATS = [
   { id: 'm4b', name: 'M4B', description: 'Audiobook format' },
 ]
 
+interface UserWithMetadata {
+  email?: string
+  user_metadata?: {
+    display_name?: string
+  }
+}
+
 function DashboardContent() {
   const router = useRouter()
-  const [user, setUser] = useState<{ email?: string } | null>(null)
+  const [user, setUser] = useState<UserWithMetadata | null>(null)
   const [jobs, setJobs] = useState<Job[]>([])
   const [loadingJobs, setLoadingJobs] = useState(true)
 
@@ -158,7 +165,7 @@ function DashboardContent() {
       <Navbar user={user} onLogout={handleLogout} />
 
       <PageShell
-        title={`Welcome back${user?.email ? `, ${user.email.split('@')[0]}` : ''}`}
+        title={`Welcome back${user?.user_metadata?.display_name ? `, ${user.user_metadata.display_name}` : (user?.email ? `, ${user.email.split('@')[0]}` : '')}`}
         subtitle="Create and manage your audiobook projects"
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -357,7 +364,7 @@ function DashboardContent() {
         </div>
       </PageShell>
 
-      <Footer />
+      <Footer user={user} />
     </>
   )
 }

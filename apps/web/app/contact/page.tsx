@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { GlassCard } from '@/components/ui'
 import { Footer } from '@/components/layout'
+import { getCurrentUser } from '@/lib/supabaseClient'
 
 /**
  * Contact Page - AuthorFlow Studios
@@ -20,6 +21,7 @@ interface FormData {
 type FormStatus = 'idle' | 'submitting' | 'success' | 'error'
 
 export default function ContactPage() {
+  const [user, setUser] = useState<{ email?: string } | null>(null)
   const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
@@ -28,6 +30,14 @@ export default function ContactPage() {
   })
   const [status, setStatus] = useState<FormStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const currentUser = await getCurrentUser()
+      setUser(currentUser)
+    }
+    checkUser()
+  }, [])
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -76,18 +86,29 @@ export default function ContactPage() {
               AuthorFlow
             </a>
             <div className="flex items-center gap-4">
-              <a
-                href="/login"
-                className="text-sm font-medium text-white/80 hover:text-white transition-colors"
-              >
-                Log in
-              </a>
-              <a
-                href="/signup"
-                className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
-              >
-                Sign up
-              </a>
+              {user ? (
+                <a
+                  href="/dashboard"
+                  className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
+                >
+                  Dashboard
+                </a>
+              ) : (
+                <>
+                  <a
+                    href="/login"
+                    className="text-sm font-medium text-white/80 hover:text-white transition-colors"
+                  >
+                    Log in
+                  </a>
+                  <a
+                    href="/signup"
+                    className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
+                  >
+                    Sign up
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -269,7 +290,7 @@ export default function ContactPage() {
         </div>
       </main>
 
-      <Footer />
+      <Footer user={user} />
     </div>
   )
 }

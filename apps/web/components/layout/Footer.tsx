@@ -1,8 +1,13 @@
+interface FooterProps {
+  user?: { email?: string } | null
+}
+
 /**
  * Footer - Footer component with links
  * Shows copyright, links, and credits
+ * Hides auth links when user is logged in
  */
-export function Footer() {
+export function Footer({ user }: FooterProps = {}) {
   const currentYear = new Date().getFullYear()
 
   return (
@@ -20,25 +25,42 @@ export function Footer() {
             </p>
           </div>
 
-          {/* Links */}
+          {/* Links - Different for logged in vs logged out */}
           <div>
             <h4 className="text-sm font-semibold text-white mb-4">Product</h4>
             <ul className="space-y-2">
-              <li>
-                <a href="/signup" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
-                  Get Started
-                </a>
-              </li>
-              <li>
-                <a href="/login" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
-                  Log In
-                </a>
-              </li>
-              <li>
-                <a href="/dashboard" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
-                  Dashboard
-                </a>
-              </li>
+              {user ? (
+                <>
+                  <li>
+                    <a href="/dashboard" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
+                      Dashboard
+                    </a>
+                  </li>
+                  <li>
+                    <a href="/library" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
+                      My Library
+                    </a>
+                  </li>
+                  <li>
+                    <a href="/settings" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
+                      Settings
+                    </a>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <a href="/signup" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
+                      Get Started
+                    </a>
+                  </li>
+                  <li>
+                    <a href="/login" className="text-sm text-white/60 hover:text-af-lavender transition-colors">
+                      Log In
+                    </a>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
 

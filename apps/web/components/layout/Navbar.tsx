@@ -6,7 +6,12 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 
 interface NavbarProps {
-  user?: { email?: string } | null
+  user?: {
+    email?: string
+    user_metadata?: {
+      display_name?: string
+    }
+  } | null
   onLogout?: () => void
 }
 
@@ -20,6 +25,17 @@ export function Navbar({ user, onLogout }: NavbarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const isActive = (path: string) => pathname === path
+
+  // Get display name or fallback to email username
+  const getDisplayName = () => {
+    return user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'User'
+  }
+
+  // Get first letter for avatar
+  const getAvatarLetter = () => {
+    const name = user?.user_metadata?.display_name || user?.email
+    return name?.[0]?.toUpperCase() || 'U'
+  }
 
   const navLinks = user
     ? [
@@ -65,10 +81,11 @@ export function Navbar({ user, onLogout }: NavbarProps) {
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2 text-sm text-white/80 hover:text-white transition-colors"
                 >
-                  {/* Avatar placeholder */}
+                  {/* Avatar */}
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-af-purple to-af-pink flex items-center justify-center text-white text-xs font-bold">
-                    {user.email?.[0]?.toUpperCase() || 'U'}
+                    {getAvatarLetter()}
                   </div>
+                  <span className="hidden sm:inline text-sm">{getDisplayName()}</span>
                   <svg
                     className={clsx('w-4 h-4 transition-transform', userMenuOpen && 'rotate-180')}
                     fill="none"
