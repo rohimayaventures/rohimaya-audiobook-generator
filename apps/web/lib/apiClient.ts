@@ -48,7 +48,16 @@ async function fetchApi<T>(
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }))
+    // Try to parse error response, handle empty bodies
+    let error = { message: 'Request failed' }
+    try {
+      const text = await response.text()
+      if (text && text.trim()) {
+        error = JSON.parse(text)
+      }
+    } catch {
+      // Ignore JSON parse errors for error responses
+    }
     throw new Error(error.detail || error.message || `HTTP ${response.status}`)
   }
 

@@ -149,7 +149,21 @@ function LibraryContent() {
       })
     } catch (err) {
       console.error('Failed to delete job:', err)
-      alert(err instanceof Error ? err.message : 'Failed to delete job')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete job'
+
+      // If job is "not found", it's already been deleted - remove from UI
+      if (errorMessage.toLowerCase().includes('not found')) {
+        setJobs(jobs.filter(j => j.id !== jobId))
+        setDownloadUrls(prev => {
+          const newUrls = { ...prev }
+          delete newUrls[jobId]
+          return newUrls
+        })
+        // Don't show error - the job is gone which is what user wanted
+        return
+      }
+
+      alert(errorMessage)
     } finally {
       setDeleting(null)
     }
