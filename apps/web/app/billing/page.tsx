@@ -114,10 +114,27 @@ export default function BillingPage() {
                     Admin
                   </span>
                 )}
+                {billing?.trial?.is_trialing && (
+                  <span className="px-3 py-1 rounded-full text-xs font-medium border bg-amber-500/20 text-amber-400 border-amber-500/30">
+                    Trial
+                  </span>
+                )}
+                {isPaidPlan && billing?.billing_interval && (
+                  <span className="px-3 py-1 rounded-full text-xs font-medium border bg-blue-500/20 text-blue-400 border-blue-500/30">
+                    {billing.billing_interval === 'yearly' ? 'Annual' : 'Monthly'}
+                  </span>
+                )}
               </div>
               <p className="text-white/60">
                 {billing?.status === 'active' && 'Your subscription is active.'}
-                {billing?.status === 'trialing' && 'You are on a free trial.'}
+                {billing?.status === 'trialing' && (
+                  <>
+                    You are on a free trial
+                    {(billing?.trial?.trial_days_remaining ?? 0) > 0
+                      ? ` with ${billing.trial?.trial_days_remaining} day${billing.trial?.trial_days_remaining !== 1 ? 's' : ''} remaining.`
+                      : '. Your trial ends today.'}
+                  </>
+                )}
                 {billing?.status === 'past_due' && 'Payment past due. Please update your payment method.'}
                 {billing?.status === 'canceled' && 'Your subscription has been canceled.'}
                 {billing?.status === 'inactive' && !billing?.is_admin && "You're on the free plan."}

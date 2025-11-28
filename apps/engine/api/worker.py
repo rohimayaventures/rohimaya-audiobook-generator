@@ -166,6 +166,15 @@ async def process_job(job_id: str):
         # Create temp directory (cross-platform)
         output_dir = get_temp_directory(job_id)
 
+        # ======================================================================
+        # DEBUG: Log pipeline parameters before execution
+        # ======================================================================
+        logger.info(f"[PIPELINE] {job_id} - Pipeline parameters:")
+        logger.info(f"[PIPELINE] {job_id} -   mode: {mode}")
+        logger.info(f"[PIPELINE] {job_id} -   tts_provider: {tts_provider}")
+        logger.info(f"[PIPELINE] {job_id} -   output_dir: {output_dir}")
+        logger.info(f"[PIPELINE] {job_id} -   manuscript_text length: {len(manuscript_text)} chars")
+
         # Import and run pipelines
         if mode == "single_voice":
             # Currently only OpenAI is supported for single-voice
@@ -173,7 +182,7 @@ async def process_job(job_id: str):
                 logger.warning(f"[JOB] {job_id} - Forcing provider from {tts_provider} to openai (only supported)")
                 tts_provider = "openai"
 
-            from pipelines.standard_single_voice import generate_single_voice_audiobook
+            from ..pipelines.standard_single_voice import generate_single_voice_audiobook
 
             # Get API key
             api_key = os.getenv("OPENAI_API_KEY")
@@ -196,7 +205,7 @@ async def process_job(job_id: str):
             )
 
         elif mode == "dual_voice":
-            from pipelines.phoenix_peacock_dual_voice import generate_dual_voice_audiobook
+            from ..pipelines.phoenix_peacock_dual_voice import generate_dual_voice_audiobook
 
             # Get API key (dual-voice uses ElevenLabs)
             api_key = os.getenv("ELEVENLABS_API_KEY")
@@ -221,7 +230,7 @@ async def process_job(job_id: str):
 
         elif mode == "findaway":
             # Findaway-ready package with cover, manifest, and ZIP
-            from pipelines.findaway_pipeline import generate_findaway_audiobook
+            from ..pipelines.findaway_pipeline import generate_findaway_audiobook
 
             # Get API key (Findaway uses OpenAI for TTS and cover)
             api_key = os.getenv("OPENAI_API_KEY")
@@ -319,6 +328,19 @@ async def process_job(job_id: str):
         else:
             raise ValueError(f"Unknown mode: {mode}. Supported modes: single_voice, dual_voice, findaway")
 
+        # ======================================================================
+        # DEBUG: Log pipeline output after execution
+        # ======================================================================
+        logger.info(f"[PIPELINE] {job_id} - Pipeline returned:")
+        logger.info(f"[PIPELINE] {job_id} -   audio_files type: {type(audio_files)}")
+        logger.info(f"[PIPELINE] {job_id} -   audio_files count: {len(audio_files) if audio_files else 0}")
+        if audio_files:
+            for i, af in enumerate(audio_files):
+                af_path = Path(af)
+                exists = af_path.exists() if af else False
+                size = af_path.stat().st_size if exists else 0
+                logger.info(f"[PIPELINE] {job_id} -   [{i}] {af} (exists={exists}, size={size})")
+
         # Update progress
         db.update_job(job_id, {"progress_percent": 80.0})
 
@@ -337,9 +359,22 @@ async def process_job(job_id: str):
             raise RuntimeError("Pipeline returned None as final audio path")
 
         if not final_audio_path.exists():
+            # Enhanced error logging for debugging
+            logger.error(f"[JOB] {job_id} - Final audio missing!")
+            logger.error(f"[JOB] {job_id} -   Expected path: {final_audio_path}")
+            logger.error(f"[JOB] {job_id} -   All audio_files: {[str(p) for p in audio_files]}")
+
+            # Check what files actually exist in output_dir
+            if output_dir.exists():
+                existing_files = list(output_dir.glob("*"))
+                logger.error(f"[JOB] {job_id} -   Files in output_dir: {[f.name for f in existing_files]}")
+            else:
+                logger.error(f"[JOB] {job_id} -   output_dir does not exist: {output_dir}")
+
             raise FileNotFoundError(
                 f"Final audio file not found at: {final_audio_path}. "
-                f"Generated files: {[str(f) for f in audio_files]}"
+                f"Generated files: {[str(f) for f in audio_files]}. "
+                f"Check Railway logs for [PIPELINE] entries to see what was returned."
             )
 
         file_size_bytes = final_audio_path.stat().st_size

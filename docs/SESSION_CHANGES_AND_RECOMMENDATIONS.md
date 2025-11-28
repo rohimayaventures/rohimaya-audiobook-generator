@@ -357,6 +357,147 @@
 
 ---
 
+## November 28, 2025 Session - Google Drive & Cover Art Integration
+
+### Changes Made This Session
+
+#### Phase 1: Google Drive Backend Routes
+**Files Modified:**
+- `apps/engine/api/main.py` - Added 6 Google Drive endpoints
+- `apps/engine/api/database.py` - Added Google Drive token storage methods
+- `supabase/migrations/0003_google_drive_tokens.sql` - **NEW** - Created migration for token storage
+
+**New Endpoints:**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/google-drive/auth-url` | GET | Get OAuth URL for connecting |
+| `/google-drive/callback` | GET | OAuth callback handler |
+| `/google-drive/status` | GET | Check connection status |
+| `/google-drive/files` | GET | List Drive files |
+| `/google-drive/import` | POST | Import file as manuscript |
+| `/google-drive/disconnect` | DELETE | Remove tokens |
+
+#### Phase 2: Frontend Google Drive Import UX
+**Files Modified:**
+- `apps/web/lib/apiClient.ts` - Added Google Drive API functions and types
+- `apps/web/app/dashboard/page.tsx` - Added Google Drive tab and file picker UI
+
+**New Features:**
+- Third tab in job creation: "Google Drive"
+- Connect/disconnect Google Drive functionality
+- File picker with document listing
+- Import file before job creation
+
+#### Phase 3: Cover Art Generation Backend
+**Files Modified:**
+- `apps/engine/api/main.py` - Added cover art endpoint with `CoverArtResponse`
+
+**New Endpoint:**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/jobs/{job_id}/cover` | GET | Get cover art URL for a job |
+
+#### Phase 4: Frontend Cover Art Options
+**Files Modified:**
+- `apps/web/lib/apiClient.ts` - Added cover art types, `getJobCoverUrl()` function
+- `apps/web/app/dashboard/page.tsx` - Added cover art toggle and vibe selector
+- `apps/web/app/job/[id]/page.tsx` - Added cover art display in job header
+
+**New Features:**
+- Cover art generation toggle in job creation form
+- Cover style/vibe selector (dramatic, minimalist, vintage, fantasy, modern, literary)
+- Cover image display on job detail page (32x32 thumbnail)
+- Loading state while cover generates
+
+### Database Migration Required
+
+Run this SQL migration in Supabase **before deploying**:
+
+```sql
+-- File: supabase/migrations/0003_google_drive_tokens.sql
+
+CREATE TABLE IF NOT EXISTS google_drive_tokens (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    access_token TEXT,
+    refresh_token TEXT,
+    token_type TEXT DEFAULT 'Bearer',
+    expires_in INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id)
+);
+
+-- Enable RLS
+ALTER TABLE google_drive_tokens ENABLE ROW LEVEL SECURITY;
+
+-- Users can only see their own tokens
+CREATE POLICY "Users can view own Google Drive tokens"
+ON google_drive_tokens FOR SELECT
+USING (auth.uid() = user_id);
+
+-- ... (see full migration file for all policies)
+```
+
+### Stripe Subscription Products Setup
+
+Create these **recurring subscription** products in Stripe Dashboard > Products:
+
+#### Creator Plan ($29/month)
+| Field | Value |
+|-------|-------|
+| **Product Name** | Creator |
+| **Description** | Perfect for indie authors - 3 audiobooks/month, up to 1 hour each |
+| **Metadata** | `plan_id: creator` |
+| **Price** | $29.00/month (recurring) |
+| **Env Var** | `STRIPE_PRICE_CREATOR_MONTHLY=price_xxx` |
+
+#### Author Pro Plan ($79/month)
+| Field | Value |
+|-------|-------|
+| **Product Name** | Author Pro |
+| **Description** | For serious authors - Unlimited audiobooks, up to 6 hours each |
+| **Metadata** | `plan_id: author_pro` |
+| **Price** | $79.00/month (recurring) |
+| **Env Var** | `STRIPE_PRICE_AUTHOR_PRO_MONTHLY=price_xxx` |
+
+#### Publisher Plan ($249/month)
+| Field | Value |
+|-------|-------|
+| **Product Name** | Publisher |
+| **Description** | For publishers & production houses - Unlimited everything + team features |
+| **Metadata** | `plan_id: publisher` |
+| **Price** | $249.00/month (recurring) |
+| **Env Var** | `STRIPE_PRICE_PUBLISHER_MONTHLY=price_xxx` |
+
+### Test Checklist for This Session's Changes
+
+#### Google Drive Integration
+- [ ] Google Drive tab appears when `GOOGLE_DRIVE_CLIENT_ID` is configured
+- [ ] "Connect Google Drive" button redirects to Google OAuth
+- [ ] OAuth callback stores tokens successfully
+- [ ] File list shows .docx, .txt, .gdoc files from Drive
+- [ ] Import file button downloads and stores manuscript
+- [ ] Imported file can be used to create job
+- [ ] Disconnect removes tokens and resets UI
+
+#### Cover Art Generation
+- [ ] Cover art toggle appears in job creation form
+- [ ] Cover vibe selector appears when toggle is on
+- [ ] Job payload includes `generate_cover` and `cover_vibe` when enabled
+- [ ] Job detail page shows cover image when `has_cover` is true
+- [ ] Cover image displays correctly (presigned URL works)
+- [ ] Cover loading state shows during job processing
+
+#### Billing/Subscriptions
+- [ ] Pricing page shows correct prices ($29/$79/$249)
+- [ ] Checkout redirects to Stripe with correct price ID
+- [ ] Webhook processes subscription events
+- [ ] User billing info updates after subscription
+- [ ] Plan entitlements are enforced
+
+---
+
 ## Contact & Support
 
 For any issues with the application:

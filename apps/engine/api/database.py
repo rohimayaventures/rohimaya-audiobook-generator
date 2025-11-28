@@ -419,6 +419,84 @@ class SupabaseDB:
 
         return result.data[0] if result.data else None
 
+    # ========================================================================
+    # GOOGLE DRIVE TOKEN OPERATIONS
+    # ========================================================================
+
+    def get_google_drive_tokens(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get user's Google Drive OAuth tokens
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            Token data or None if not found
+        """
+        try:
+            result = self.client.table("google_drive_tokens").select("*").eq("user_id", user_id).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            print(f"Error getting Google Drive tokens for user {user_id}: {e}")
+            return None
+
+    def store_google_drive_tokens(self, user_id: str, tokens: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Store or update user's Google Drive OAuth tokens
+
+        Args:
+            user_id: User UUID
+            tokens: Token data (access_token, refresh_token, expires_in, token_type)
+
+        Returns:
+            Stored token record
+        """
+        try:
+            from datetime import datetime
+
+            token_data = {
+                "user_id": user_id,
+                "access_token": tokens.get("access_token"),
+                "refresh_token": tokens.get("refresh_token"),
+                "token_type": tokens.get("token_type", "Bearer"),
+                "expires_in": tokens.get("expires_in"),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+
+            # Check if exists
+            existing = self.get_google_drive_tokens(user_id)
+
+            if existing:
+                # Update existing - preserve refresh_token if not provided
+                if not token_data.get("refresh_token") and existing.get("refresh_token"):
+                    token_data["refresh_token"] = existing["refresh_token"]
+
+                result = self.client.table("google_drive_tokens").update(token_data).eq("user_id", user_id).execute()
+            else:
+                result = self.client.table("google_drive_tokens").insert(token_data).execute()
+
+            return result.data[0] if result.data else None
+        except Exception as e:
+            print(f"Error storing Google Drive tokens for user {user_id}: {e}")
+            return None
+
+    def clear_google_drive_tokens(self, user_id: str) -> bool:
+        """
+        Delete user's Google Drive OAuth tokens
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            True if deleted successfully
+        """
+        try:
+            self.client.table("google_drive_tokens").delete().eq("user_id", user_id).execute()
+            return True
+        except Exception as e:
+            print(f"Error clearing Google Drive tokens for user {user_id}: {e}")
+            return False
+
 
 # Global database instance (lazy initialization)
 _db_instance: SupabaseDB = None

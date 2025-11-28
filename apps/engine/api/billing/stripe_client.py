@@ -5,14 +5,23 @@ Wrapper around Stripe SDK for subscription management.
 
 Environment Variables Required:
 - STRIPE_SECRET_KEY: Stripe secret key (sk_live_... or sk_test_...)
-- STRIPE_PRICE_CREATOR_MONTHLY: Price ID for Creator plan
-- STRIPE_PRICE_AUTHORPRO_MONTHLY: Price ID for Author Pro plan
-- STRIPE_PRICE_PUBLISHER_MONTHLY: Price ID for Publisher plan
+- STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_...)
 
-Optional:
-- STRIPE_PRICE_CREATOR_YEARLY: Yearly price for Creator
-- STRIPE_PRICE_AUTHORPRO_YEARLY: Yearly price for Author Pro
-- STRIPE_PRICE_PUBLISHER_YEARLY: Yearly price for Publisher
+Price ID Environment Variables (set these in Railway):
+- STRIPE_PRICE_CREATOR_MONTHLY: Price ID for Creator plan (price_...)
+- STRIPE_PRICE_AUTHOR_PRO_MONTHLY: Price ID for Author Pro plan (price_...)
+- STRIPE_PRICE_PUBLISHER_MONTHLY: Price ID for Publisher plan (price_...)
+
+Optional yearly prices:
+- STRIPE_PRICE_CREATOR_YEARLY
+- STRIPE_PRICE_AUTHOR_PRO_YEARLY
+- STRIPE_PRICE_PUBLISHER_YEARLY
+
+IMPORTANT: The env var names are built from:
+  STRIPE_PRICE_{plan_id.upper().replace("-", "_")}_{MONTHLY|YEARLY}
+
+So for plan_id="author_pro", billing_period="monthly":
+  → STRIPE_PRICE_AUTHOR_PRO_MONTHLY (with underscore, not AUTHORPRO)
 """
 
 import os
@@ -85,9 +94,11 @@ def get_price_id_for_plan(plan_id: str, billing_period: str = "monthly") -> str:
 
 
 # Mapping of plan IDs to env var names (for documentation)
+# Note: The actual env var names are built dynamically by get_price_id_for_plan()
+# using plan_id.upper().replace("-", "_") - so author_pro → AUTHOR_PRO
 PRICE_ENV_VARS = {
     "creator": "STRIPE_PRICE_CREATOR_MONTHLY",
-    "author_pro": "STRIPE_PRICE_AUTHORPRO_MONTHLY",
+    "author_pro": "STRIPE_PRICE_AUTHOR_PRO_MONTHLY",  # Uses underscore: AUTHOR_PRO not AUTHORPRO
     "publisher": "STRIPE_PRICE_PUBLISHER_MONTHLY",
 }
 

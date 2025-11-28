@@ -15,6 +15,7 @@ export default function PricingPage() {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
 
   const handleSelectPlan = async (planId: string) => {
     if (planId === 'free') {
@@ -33,15 +34,15 @@ export default function PricingPage() {
 
       if (!session) {
         // Redirect to login with return URL
-        router.push(`/login?redirect=/pricing&plan=${planId}`)
+        router.push(`/login?redirect=/pricing&plan=${planId}&interval=${billingInterval}`)
         return
       }
 
-      // Create checkout session
+      // Create checkout session with selected billing interval
       const result = await createCheckoutSession(
         session.access_token,
         planId,
-        'monthly'
+        billingInterval
       )
 
       // Redirect to Stripe Checkout
@@ -72,6 +73,33 @@ export default function PricingPage() {
             Transform your manuscripts into professional audiobooks.
             Start free and upgrade as you grow.
           </p>
+
+          {/* Billing interval toggle */}
+          <div className="mt-8 flex items-center justify-center gap-4">
+            <span className={`text-sm ${billingInterval === 'monthly' ? 'text-white' : 'text-white/60'}`}>
+              Monthly
+            </span>
+            <button
+              onClick={() => setBillingInterval(billingInterval === 'monthly' ? 'yearly' : 'monthly')}
+              className={`relative w-14 h-7 rounded-full transition-colors ${
+                billingInterval === 'yearly' ? 'bg-af-purple' : 'bg-white/20'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition-transform ${
+                  billingInterval === 'yearly' ? 'translate-x-7' : ''
+                }`}
+              />
+            </button>
+            <span className={`text-sm ${billingInterval === 'yearly' ? 'text-white' : 'text-white/60'}`}>
+              Yearly
+            </span>
+            {billingInterval === 'yearly' && (
+              <span className="ml-2 px-2 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
+                2 months free
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Error message */}
@@ -112,16 +140,42 @@ export default function PricingPage() {
                       {plan.name}
                     </span>
                     <div className="mt-4">
-                      <span className="text-4xl font-bold text-white">
-                        ${plan.price_monthly}
-                      </span>
-                      {plan.price_monthly > 0 && (
-                        <span className="text-white/60">/month</span>
+                      {billingInterval === 'yearly' && plan.price_yearly > 0 ? (
+                        <>
+                          <span className="text-4xl font-bold text-white">
+                            ${Math.round(plan.price_yearly / 12)}
+                          </span>
+                          <span className="text-white/60">/month</span>
+                          <div className="text-xs text-white/40 mt-1">
+                            ${plan.price_yearly}/year
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-4xl font-bold text-white">
+                            ${plan.price_monthly}
+                          </span>
+                          {plan.price_monthly > 0 && (
+                            <span className="text-white/60">/month</span>
+                          )}
+                        </>
                       )}
                     </div>
+                    {billingInterval === 'yearly' && plan.yearly_savings && (
+                      <div className="mt-2">
+                        <span className="inline-block px-2 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
+                          {plan.yearly_savings}
+                        </span>
+                      </div>
+                    )}
                     <p className="mt-2 text-white/60 text-sm">
                       {plan.description}
                     </p>
+                    {plan.trial_days > 0 && (
+                      <p className="mt-1 text-amber-400 text-xs font-medium">
+                        {plan.trial_days}-day free trial
+                      </p>
+                    )}
                   </div>
 
                   {/* Features list */}
@@ -162,7 +216,7 @@ export default function PricingPage() {
                       disabled={!!loading}
                       className={`w-full ${isHighlighted ? '' : 'bg-white/10 hover:bg-white/20'}`}
                     >
-                      {isLoading ? 'Loading...' : `Start ${plan.name}`}
+                      {isLoading ? 'Loading...' : plan.trial_days > 0 ? `Start ${plan.trial_days}-day free trial` : `Start ${plan.name}`}
                     </PrimaryButton>
                   )}
                 </GlassCard>

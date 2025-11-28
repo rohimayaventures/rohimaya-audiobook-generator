@@ -7,7 +7,18 @@ import { useDropzone } from 'react-dropzone'
 import { GlassCard, PrimaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { createClient, getCurrentUser } from '@/lib/supabaseClient'
-import { createJob, getJobs, type Job } from '@/lib/apiClient'
+import {
+  createJob,
+  getJobs,
+  getGoogleDriveAuthUrl,
+  getGoogleDriveStatus,
+  listGoogleDriveFiles,
+  importGoogleDriveFile,
+  disconnectGoogleDrive,
+  type Job,
+  type GoogleDriveFile,
+  type GoogleDriveStatus,
+} from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 import { getBillingInfo, type BillingInfo, PLANS } from '@/lib/billing'
 
@@ -34,6 +45,16 @@ const OUTPUT_FORMATS = [
   { id: 'm4b', name: 'M4B', description: 'Audiobook format' },
 ]
 
+// Cover art vibe options
+const COVER_VIBES = [
+  { id: 'dramatic', name: 'Dramatic', description: 'Bold, cinematic style' },
+  { id: 'minimalist', name: 'Minimalist', description: 'Clean, simple design' },
+  { id: 'vintage', name: 'Vintage', description: 'Classic, retro feel' },
+  { id: 'fantasy', name: 'Fantasy', description: 'Magical, ethereal style' },
+  { id: 'modern', name: 'Modern', description: 'Contemporary, sleek design' },
+  { id: 'literary', name: 'Literary', description: 'Elegant, bookish aesthetic' },
+]
+
 interface UserWithMetadata {
   email?: string
   user_metadata?: {
@@ -50,7 +71,7 @@ function DashboardContent() {
   const [loadingBilling, setLoadingBilling] = useState(true)
 
   // Form state
-  const [inputMode, setInputMode] = useState<'file' | 'text'>('file')
+  const [inputMode, setInputMode] = useState<'file' | 'text' | 'google_drive'>('file')
   const [file, setFile] = useState<File | null>(null)
   const [text, setText] = useState('')
   const [title, setTitle] = useState('')
@@ -59,7 +80,19 @@ function DashboardContent() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  // Fetch user, jobs, and billing info on mount
+  // Cover art options
+  const [generateCover, setGenerateCover] = useState(false)
+  const [coverVibe, setCoverVibe] = useState('dramatic')
+
+  // Google Drive state
+  const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatus | null>(null)
+  const [googleDriveFiles, setGoogleDriveFiles] = useState<GoogleDriveFile[]>([])
+  const [selectedDriveFile, setSelectedDriveFile] = useState<GoogleDriveFile | null>(null)
+  const [loadingDriveFiles, setLoadingDriveFiles] = useState(false)
+  const [driveImporting, setDriveImporting] = useState(false)
+  const [importedManuscriptPath, setImportedManuscriptPath] = useState<string | null>(null)
+
+  // Fetch user, jobs, billing info, and Google Drive status on mount
   useEffect(() => {
     const fetchData = async () => {
       const currentUser = await getCurrentUser()
@@ -86,10 +119,82 @@ function DashboardContent() {
         console.error('Failed to fetch billing info:', err)
       }
       setLoadingBilling(false)
+
+      // Fetch Google Drive status
+      try {
+        const driveStatus = await getGoogleDriveStatus()
+        setGoogleDriveStatus(driveStatus)
+      } catch (err) {
+        console.error('Failed to fetch Google Drive status:', err)
+      }
     }
 
     fetchData()
   }, [])
+
+  // Fetch Google Drive files when mode changes to google_drive and user is connected
+  useEffect(() => {
+    if (inputMode === 'google_drive' && googleDriveStatus?.connected) {
+      fetchDriveFiles()
+    }
+  }, [inputMode, googleDriveStatus?.connected])
+
+  // Fetch Google Drive files
+  const fetchDriveFiles = async () => {
+    setLoadingDriveFiles(true)
+    try {
+      const response = await listGoogleDriveFiles({ pageSize: 20 })
+      setGoogleDriveFiles(response.files)
+    } catch (err) {
+      console.error('Failed to fetch Drive files:', err)
+      setCreateError('Failed to load Google Drive files')
+    }
+    setLoadingDriveFiles(false)
+  }
+
+  // Connect to Google Drive
+  const handleConnectGoogleDrive = async () => {
+    try {
+      const { auth_url } = await getGoogleDriveAuthUrl()
+      window.location.href = auth_url
+    } catch (err) {
+      console.error('Failed to get Google Drive auth URL:', err)
+      setCreateError('Failed to connect to Google Drive')
+    }
+  }
+
+  // Disconnect Google Drive
+  const handleDisconnectGoogleDrive = async () => {
+    try {
+      await disconnectGoogleDrive()
+      setGoogleDriveStatus({ connected: false, has_tokens: false, configured: googleDriveStatus?.configured || false })
+      setGoogleDriveFiles([])
+      setSelectedDriveFile(null)
+    } catch (err) {
+      console.error('Failed to disconnect Google Drive:', err)
+    }
+  }
+
+  // Import selected file from Google Drive
+  const handleImportDriveFile = async () => {
+    if (!selectedDriveFile) return
+
+    setDriveImporting(true)
+    setCreateError('')
+
+    try {
+      const result = await importGoogleDriveFile(selectedDriveFile.id)
+      setImportedManuscriptPath(result.manuscript_path)
+      if (!title) {
+        setTitle(result.filename.replace(/\.[^/.]+$/, ''))
+      }
+    } catch (err) {
+      console.error('Failed to import Drive file:', err)
+      setCreateError(err instanceof Error ? err.message : 'Failed to import file')
+    }
+
+    setDriveImporting(false)
+  }
 
   // File dropzone
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -128,18 +233,32 @@ function DashboardContent() {
       return
     }
 
+    if (inputMode === 'google_drive' && !importedManuscriptPath) {
+      setCreateError('Please import a file from Google Drive first')
+      return
+    }
+
     setCreating(true)
 
     try {
+      // Determine source type
+      let sourceType: 'upload' | 'paste' | 'google_drive' = 'upload'
+      if (inputMode === 'text') sourceType = 'paste'
+      else if (inputMode === 'google_drive') sourceType = 'google_drive'
+
       const payload = {
-        title: title || (file?.name.replace(/\.[^/.]+$/, '') || 'Untitled'),
-        source_type: inputMode === 'file' ? 'upload' as const : 'paste' as const,
+        title: title || (file?.name.replace(/\.[^/.]+$/, '') || selectedDriveFile?.name.replace(/\.[^/.]+$/, '') || 'Untitled'),
+        source_type: sourceType,
         mode: 'single_voice' as const,
         tts_provider: 'openai' as const,
         narrator_voice_id: voiceId,
         audio_format: outputFormat,
         audio_bitrate: '128k',
+        // Text or Google Drive source path
         ...(inputMode === 'text' ? { manuscript_text: text } : {}),
+        ...(inputMode === 'google_drive' && importedManuscriptPath ? { source_path: importedManuscriptPath } : {}),
+        // Cover art options
+        ...(generateCover ? { generate_cover: true, cover_vibe: coverVibe } : {}),
       }
 
       await createJob(payload, inputMode === 'file' ? file! : undefined)
@@ -152,6 +271,9 @@ function DashboardContent() {
       setFile(null)
       setText('')
       setTitle('')
+      setSelectedDriveFile(null)
+      setImportedManuscriptPath(null)
+      setGenerateCover(false)
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create job')
     }
@@ -212,6 +334,15 @@ function DashboardContent() {
                 }`}>
                   {billingInfo.plan_name || (PLANS[billingInfo.plan_id]?.name || 'Free')}
                 </div>
+
+                {/* Trial Badge */}
+                {billingInfo.trial?.is_trialing && (
+                  <div className="px-3 py-1 rounded-full text-sm font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    {billingInfo.trial.trial_days_remaining !== null && billingInfo.trial.trial_days_remaining > 0
+                      ? `Trial: ${billingInfo.trial.trial_days_remaining} day${billingInfo.trial.trial_days_remaining !== 1 ? 's' : ''} left`
+                      : 'Trial ending today'}
+                  </div>
+                )}
 
                 {/* Usage Info */}
                 {billingInfo.plan_id !== 'admin' && billingInfo.entitlements && (
@@ -281,6 +412,21 @@ function DashboardContent() {
               >
                 Paste text
               </button>
+              {googleDriveStatus?.configured && (
+                <button
+                  onClick={() => setInputMode('google_drive')}
+                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                    inputMode === 'google_drive'
+                      ? 'bg-af-purple text-white'
+                      : 'bg-af-card text-white/60 hover:text-white'
+                  }`}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7.71 3.5L1.15 15l3.43 6h13.16l3.42-6L14.57 3.5H7.71zm-.78 1h6.21L17.7 12l-2.1 3.5H7.35L5.25 12 6.93 4.5zM8.35 13h6.3l1.4 2.5H6.95l1.4-2.5z" />
+                  </svg>
+                  Google Drive
+                </button>
+              )}
             </div>
 
             {/* File dropzone */}
@@ -324,6 +470,106 @@ function DashboardContent() {
                 placeholder="Paste your manuscript text here..."
                 className="input-field min-h-[200px] resize-none"
               />
+            )}
+
+            {/* Google Drive picker */}
+            {inputMode === 'google_drive' && (
+              <div className="border-2 border-dashed rounded-xl p-6 border-af-card-border">
+                {!googleDriveStatus?.connected ? (
+                  <div className="text-center">
+                    <svg className="w-12 h-12 mx-auto mb-4 text-white/40" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M7.71 3.5L1.15 15l3.43 6h13.16l3.42-6L14.57 3.5H7.71zm-.78 1h6.21L17.7 12l-2.1 3.5H7.35L5.25 12 6.93 4.5zM8.35 13h6.3l1.4 2.5H6.95l1.4-2.5z" />
+                    </svg>
+                    <p className="text-white/60 mb-4">Connect your Google Drive to import documents</p>
+                    <button
+                      onClick={handleConnectGoogleDrive}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                    >
+                      Connect Google Drive
+                    </button>
+                  </div>
+                ) : loadingDriveFiles ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-af-purple mx-auto mb-4"></div>
+                    <p className="text-white/60">Loading your files...</p>
+                  </div>
+                ) : (
+                  <div>
+                    {/* Connection status and disconnect button */}
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-green-400 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                        Connected to Google Drive
+                      </span>
+                      <button
+                        onClick={handleDisconnectGoogleDrive}
+                        className="text-sm text-white/40 hover:text-red-400 transition-colors"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+
+                    {/* File list */}
+                    {googleDriveFiles.length === 0 ? (
+                      <p className="text-center text-white/40 py-4">No compatible documents found in your Drive</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                        {googleDriveFiles.map((driveFile) => (
+                          <button
+                            key={driveFile.id}
+                            onClick={() => setSelectedDriveFile(driveFile)}
+                            className={`w-full p-3 rounded-lg text-left transition-colors flex items-center gap-3 ${
+                              selectedDriveFile?.id === driveFile.id
+                                ? 'bg-af-purple/20 border border-af-purple'
+                                : 'bg-af-card hover:bg-white/10 border border-transparent'
+                            }`}
+                          >
+                            <svg className="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-medium truncate">{driveFile.name}</p>
+                              {driveFile.modifiedTime && (
+                                <p className="text-white/40 text-xs">
+                                  Modified {new Date(driveFile.modifiedTime).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Import button */}
+                    {selectedDriveFile && !importedManuscriptPath && (
+                      <button
+                        onClick={handleImportDriveFile}
+                        disabled={driveImporting}
+                        className="w-full mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                      >
+                        {driveImporting ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            Importing...
+                          </>
+                        ) : (
+                          <>Import &quot;{selectedDriveFile.name}&quot;</>
+                        )}
+                      </button>
+                    )}
+
+                    {/* Imported file confirmation */}
+                    {importedManuscriptPath && (
+                      <div className="mt-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm flex items-center gap-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        File imported successfully! Ready to convert.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Title */}
@@ -374,6 +620,52 @@ function DashboardContent() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Cover Art Generation */}
+            <div className="mt-6 p-4 rounded-lg bg-af-card border border-af-card-border">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <label className="text-sm font-medium text-white/80">
+                    Generate AI Cover Art
+                  </label>
+                  <p className="text-xs text-white/40 mt-1">
+                    Create a unique cover image for your audiobook
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGenerateCover(!generateCover)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    generateCover ? 'bg-af-purple' : 'bg-white/20'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      generateCover ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {generateCover && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-white/80 mb-2">
+                    Cover Style
+                  </label>
+                  <select
+                    value={coverVibe}
+                    onChange={(e) => setCoverVibe(e.target.value)}
+                    className="input-field"
+                  >
+                    {COVER_VIBES.map((vibe) => (
+                      <option key={vibe.id} value={vibe.id}>
+                        {vibe.name} - {vibe.description}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Error message */}

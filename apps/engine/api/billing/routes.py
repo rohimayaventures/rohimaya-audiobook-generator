@@ -65,8 +65,18 @@ class CreateCheckoutSessionRequest(BaseModel):
 # =============================================================================
 # FREE TRIAL CONFIGURATION
 # =============================================================================
-# All new subscriptions get a free trial period
-FREE_TRIAL_DAYS = 7  # 7-day free trial for all plans
+# Trial days per plan (for new subscribers only, not returning users)
+# These are applied via subscription_data.trial_period_days in checkout session
+PLAN_TRIAL_DAYS = {
+    "creator": 7,       # Creator: 7-day free trial
+    "author_pro": 14,   # Author Pro: 14-day free trial
+    "publisher": 14,    # Publisher: 14-day free trial
+}
+
+
+def get_trial_days_for_plan(plan_id: str) -> int:
+    """Get the trial period in days for a given plan."""
+    return PLAN_TRIAL_DAYS.get(plan_id, 7)  # Default 7 days if plan not found
 
 
 class CheckoutSessionResponse(BaseModel):
@@ -88,17 +98,27 @@ class UsageInfo(BaseModel):
     period_end: Optional[str] = None
 
 
+class TrialInfo(BaseModel):
+    """Trial information for a subscription"""
+    is_trialing: bool = False
+    trial_start: Optional[str] = None
+    trial_end: Optional[str] = None
+    trial_days_remaining: Optional[int] = None
+
+
 class BillingInfoResponse(BaseModel):
     """Current user's billing information"""
     plan_id: str
     plan_name: Optional[str] = None
     status: str
+    billing_interval: str = "monthly"  # "monthly" or "yearly"
     current_period_end: Optional[str] = None
     cancel_at_period_end: bool = False
     entitlements: Dict[str, Any]
     is_admin: bool = False
     stripe_customer_id: Optional[str] = None
     usage: Optional[UsageInfo] = None
+    trial: Optional[TrialInfo] = None
 
 
 class PlansResponse(BaseModel):
@@ -190,7 +210,7 @@ async def create_checkout(
 
     # Check if user has ever had a subscription (no trial for returning users)
     has_previous_subscription = billing and billing.get("stripe_subscription_id")
-    trial_days = FREE_TRIAL_DAYS if not has_previous_subscription else None
+    trial_days = get_trial_days_for_plan(request.plan_id) if not has_previous_subscription else None
 
     # Create checkout session with free trial for new subscribers
     try:
@@ -355,16 +375,66 @@ async def get_billing_info(
         else:
             period_end_str = str(period_end)
 
+    # Build trial info
+    trial_info = None
+    status_value = billing.get("status", "inactive")
+    trial_end = billing.get("trial_end")
+    trial_start = billing.get("trial_start")
+
+    if status_value == "trialing" or trial_end:
+        trial_end_dt = None
+        trial_start_dt = None
+
+        # Parse trial_end
+        if trial_end:
+            if isinstance(trial_end, datetime):
+                trial_end_dt = trial_end
+            else:
+                try:
+                    trial_end_dt = datetime.fromisoformat(str(trial_end).replace("Z", "+00:00"))
+                except:
+                    pass
+
+        # Parse trial_start
+        if trial_start:
+            if isinstance(trial_start, datetime):
+                trial_start_dt = trial_start
+            else:
+                try:
+                    trial_start_dt = datetime.fromisoformat(str(trial_start).replace("Z", "+00:00"))
+                except:
+                    pass
+
+        # Calculate days remaining
+        days_remaining = None
+        if trial_end_dt:
+            now = datetime.utcnow()
+            if trial_end_dt.tzinfo:
+                # Make now timezone-aware to match
+                from datetime import timezone
+                now = now.replace(tzinfo=timezone.utc)
+            delta = trial_end_dt - now
+            days_remaining = max(0, delta.days)
+
+        trial_info = TrialInfo(
+            is_trialing=status_value == "trialing",
+            trial_start=trial_start_dt.isoformat() if trial_start_dt else None,
+            trial_end=trial_end_dt.isoformat() if trial_end_dt else None,
+            trial_days_remaining=days_remaining,
+        )
+
     return BillingInfoResponse(
         plan_id=plan_id,
         plan_name=plan_name,
         status=billing.get("status", "inactive"),
+        billing_interval=billing.get("billing_interval", "monthly"),
         current_period_end=period_end_str,
         cancel_at_period_end=billing.get("cancel_at_period_end", False),
         entitlements=entitlements.to_dict(),
         is_admin=False,
         stripe_customer_id=billing.get("stripe_customer_id"),
         usage=usage_info,
+        trial=trial_info,
     )
 
 

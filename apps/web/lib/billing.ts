@@ -30,21 +30,33 @@ export interface UsageInfo {
   period_end: string
 }
 
+export interface TrialInfo {
+  is_trialing: boolean
+  trial_start: string | null
+  trial_end: string | null
+  trial_days_remaining: number | null
+}
+
 export interface BillingInfo {
   plan_id: string
   plan_name?: string
   status: string
+  billing_interval: 'monthly' | 'yearly'
   current_period_end: string | null
   cancel_at_period_end: boolean
   entitlements: Entitlements
   is_admin: boolean
   stripe_customer_id: string | null
   usage?: UsageInfo
+  trial?: TrialInfo | null
 }
 
 export interface PlanInfo {
   name: string
   price_monthly: number
+  price_yearly: number
+  yearly_savings: string  // e.g., "2 months free" or "Save $58"
+  trial_days: number
   description: string
   highlight: boolean
   features: string[]
@@ -149,11 +161,19 @@ export async function createPortalSession(accessToken: string): Promise<PortalSe
 
 /**
  * Plan display information (frontend fallback)
+ *
+ * Yearly pricing: ~2 months free (roughly 17% discount)
+ * - Creator: $29/mo × 12 = $348 → $290/yr (save $58)
+ * - Author Pro: $79/mo × 12 = $948 → $790/yr (save $158)
+ * - Publisher: $249/mo × 12 = $2988 → $2490/yr (save $498)
  */
 export const PLANS: Record<string, PlanInfo> = {
   free: {
     name: 'Free',
     price_monthly: 0,
+    price_yearly: 0,
+    yearly_savings: '',
+    trial_days: 0,
     description: 'Try AuthorFlow with limited features',
     highlight: false,
     features: [
@@ -166,6 +186,9 @@ export const PLANS: Record<string, PlanInfo> = {
   creator: {
     name: 'Creator',
     price_monthly: 29,
+    price_yearly: 290,
+    yearly_savings: '2 months free',
+    trial_days: 7,
     description: 'Perfect for indie authors',
     highlight: false,
     features: [
@@ -180,6 +203,9 @@ export const PLANS: Record<string, PlanInfo> = {
   author_pro: {
     name: 'Author Pro',
     price_monthly: 79,
+    price_yearly: 790,
+    yearly_savings: '2 months free',
+    trial_days: 14,
     description: 'For serious authors',
     highlight: true,
     features: [
@@ -195,6 +221,9 @@ export const PLANS: Record<string, PlanInfo> = {
   publisher: {
     name: 'Publisher',
     price_monthly: 249,
+    price_yearly: 2490,
+    yearly_savings: '2 months free',
+    trial_days: 14,
     description: 'For publishers & production houses',
     highlight: false,
     features: [

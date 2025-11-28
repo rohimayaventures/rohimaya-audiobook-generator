@@ -18,14 +18,21 @@ This document explains how to set up and configure Stripe billing for AuthorFlow
 
 ## Overview
 
-AuthorFlow Studios uses Stripe for subscription billing with the following tiers:
+AuthorFlow Studios uses Stripe for subscription billing with monthly and yearly intervals. Free trials are configured per-plan and applied via the Stripe Checkout API.
 
-| Plan | Price | Projects/Month | Max Minutes/Book | Key Features |
-|------|-------|----------------|------------------|--------------|
-| Free | $0 | 1 | 5 | Basic testing |
-| Creator | $29/mo | 3 | 60 | Findaway packages, covers |
-| Author Pro | $79/mo | Unlimited | 360 | Dual voice, priority queue |
-| Publisher | $249/mo | Unlimited | Unlimited | Team access (5 members) |
+### Subscription Plans
+
+| Plan | Monthly | Yearly | Trial | Projects/Month | Max Minutes/Book |
+|------|---------|--------|-------|----------------|------------------|
+| Free | $0 | - | - | 1 | 5 |
+| Creator | $29/mo | $290/yr | 7 days | 3 | 60 |
+| Author Pro | $79/mo | $790/yr | 14 days | Unlimited | 360 |
+| Publisher | $249/mo | $2,490/yr | 14 days | Unlimited | Unlimited |
+
+### Yearly Savings
+- **Creator**: Save $58/year (~2 months free)
+- **Author Pro**: Save $158/year (~2 months free)
+- **Publisher**: Save $498/year (~2 months free)
 
 ---
 
@@ -38,20 +45,18 @@ AuthorFlow Studios uses Stripe for subscription billing with the following tiers
 STRIPE_SECRET_KEY=sk_live_...  # or sk_test_... for development
 
 # Stripe Price IDs (get these after creating products)
+# NOTE: Use AUTHOR_PRO with underscore, not AUTHORPRO
 STRIPE_PRICE_CREATOR_MONTHLY=price_...
-STRIPE_PRICE_AUTHORPRO_MONTHLY=price_...
+STRIPE_PRICE_AUTHOR_PRO_MONTHLY=price_...
 STRIPE_PRICE_PUBLISHER_MONTHLY=price_...
+
+# Yearly Price IDs (required for yearly billing)
+STRIPE_PRICE_CREATOR_YEARLY=price_...
+STRIPE_PRICE_AUTHOR_PRO_YEARLY=price_...
+STRIPE_PRICE_PUBLISHER_YEARLY=price_...
 
 # Webhook Secret (get this after creating webhook endpoint)
 STRIPE_WEBHOOK_SECRET=whsec_...
-```
-
-### Optional (Yearly Billing)
-
-```bash
-STRIPE_PRICE_CREATOR_YEARLY=price_...
-STRIPE_PRICE_AUTHORPRO_YEARLY=price_...
-STRIPE_PRICE_PUBLISHER_YEARLY=price_...
 ```
 
 ### Frontend (Vercel)
@@ -59,6 +64,38 @@ STRIPE_PRICE_PUBLISHER_YEARLY=price_...
 ```bash
 NEXT_PUBLIC_API_URL=https://your-engine.railway.app
 ```
+
+---
+
+## Free Trials
+
+### Configuration
+
+Free trials are set via `subscription_data.trial_period_days` in the Stripe Checkout session (NOT on the Stripe price object):
+
+```python
+# apps/engine/api/billing/routes.py
+PLAN_TRIAL_DAYS = {
+    "creator": 7,       # 7-day trial
+    "author_pro": 14,   # 14-day trial
+    "publisher": 14,    # 14-day trial
+}
+```
+
+### Trial Rules
+
+1. **New subscribers only** - Users who previously had a subscription don't get another trial
+2. **Full access** - Users on trial have full plan entitlements
+3. **Automatic billing** - Stripe charges the card when trial ends
+4. **Trial badge** - Dashboard shows trial days remaining
+
+### Webhook Events
+
+| Event | When It Fires |
+|-------|--------------|
+| `customer.subscription.created` | When trial starts (status="trialing") |
+| `customer.subscription.trial_will_end` | 3 days before trial ends |
+| `customer.subscription.updated` | When trial ends (status changes to "active" or "past_due") |
 
 ---
 

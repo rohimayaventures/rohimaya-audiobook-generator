@@ -18,14 +18,14 @@ from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
 from openai import OpenAI
 
-from agents.emotion_parser_agent import (
+from ..agents.emotion_parser_agent import (
     analyze_text_for_emotions_and_characters,
     extract_characters_from_manuscript,
     build_emotional_tts_instruction,
     EmotionalTone,
 )
-from core.chapter_parser import split_into_chapters, sanitize_title_for_filename, clean_text
-from core.advanced_chunker import chunk_chapter_advanced
+from ..core.chapter_parser import split_into_chapters, sanitize_title_for_filename, clean_text
+from ..core.advanced_chunker import chunk_chapter_advanced
 
 logger = logging.getLogger(__name__)
 
@@ -529,7 +529,7 @@ def generate_multi_character_audiobook(
     Returns:
         List of paths to generated audio files
     """
-    from agents.manuscript_parser_agent import parse_manuscript_structure
+    from ..agents.manuscript_parser_agent import parse_manuscript_structure
 
     # Parse manuscript
     manuscript_structure = parse_manuscript_structure(

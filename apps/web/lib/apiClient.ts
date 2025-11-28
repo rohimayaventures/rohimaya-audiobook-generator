@@ -108,6 +108,12 @@ export interface Job {
   created_at: string
   started_at?: string
   completed_at?: string
+  // Cover art fields
+  generate_cover?: boolean
+  cover_vibe?: string
+  cover_image_provider?: string
+  has_cover?: boolean
+  cover_image_path?: string
 }
 
 export interface CreateJobPayload {
@@ -133,7 +139,10 @@ export interface CreateJobPayload {
   isbn?: string
   publisher?: string
   sample_style?: 'default' | 'spicy' | 'ultra_spicy'
+  // Cover art generation
+  generate_cover?: boolean
   cover_vibe?: string
+  cover_image_provider?: 'openai' | 'banana'
 }
 
 export interface CloneJobPayload {
@@ -333,4 +342,101 @@ export async function cloneJob(id: string, payload?: CloneJobPayload): Promise<J
  */
 export async function getSystemStatus(): Promise<SystemStatus> {
   return fetchApi<SystemStatus>('/admin/status')
+}
+
+// ============================================
+// Google Drive Integration
+// ============================================
+
+export interface GoogleDriveStatus {
+  connected: boolean
+  has_tokens: boolean
+  configured: boolean
+}
+
+export interface GoogleDriveFile {
+  id: string
+  name: string
+  mimeType: string
+  size?: string
+  modifiedTime?: string
+  webViewLink?: string
+}
+
+export interface GoogleDriveFilesResponse {
+  files: GoogleDriveFile[]
+  nextPageToken?: string
+}
+
+/**
+ * Get Google Drive OAuth URL for connecting
+ */
+export async function getGoogleDriveAuthUrl(): Promise<{ auth_url: string }> {
+  return fetchApi<{ auth_url: string }>('/google-drive/auth-url')
+}
+
+/**
+ * Check Google Drive connection status
+ */
+export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
+  return fetchApi<GoogleDriveStatus>('/google-drive/status')
+}
+
+/**
+ * List files from Google Drive
+ */
+export async function listGoogleDriveFiles(params?: {
+  pageToken?: string
+  pageSize?: number
+}): Promise<GoogleDriveFilesResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.pageToken) searchParams.set('page_token', params.pageToken)
+  if (params?.pageSize) searchParams.set('page_size', params.pageSize.toString())
+
+  const query = searchParams.toString()
+  const endpoint = query ? `/google-drive/files?${query}` : '/google-drive/files'
+
+  return fetchApi<GoogleDriveFilesResponse>(endpoint)
+}
+
+/**
+ * Import a file from Google Drive as manuscript
+ */
+export async function importGoogleDriveFile(fileId: string): Promise<{
+  success: boolean
+  file_id: string
+  filename: string
+  text_length: number
+  manuscript_path: string
+}> {
+  return fetchApi('/google-drive/import', {
+    method: 'POST',
+    body: JSON.stringify({ file_id: fileId }),
+  })
+}
+
+/**
+ * Disconnect Google Drive (remove tokens)
+ */
+export async function disconnectGoogleDrive(): Promise<{ success: boolean; message: string }> {
+  return fetchApi<{ success: boolean; message: string }>('/google-drive/disconnect', {
+    method: 'DELETE',
+  })
+}
+
+// ============================================
+// Cover Art
+// ============================================
+
+export interface CoverArtResponse {
+  has_cover: boolean
+  cover_url?: string
+  cover_path?: string
+}
+
+/**
+ * Get cover art URL for a job
+ */
+export async function getJobCoverUrl(jobId: string): Promise<CoverArtResponse> {
+  return fetchApi<CoverArtResponse>(`/jobs/${jobId}/cover`)
 }

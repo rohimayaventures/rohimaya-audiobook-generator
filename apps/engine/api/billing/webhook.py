@@ -21,6 +21,7 @@ Handled Events:
 - customer.subscription.created - New subscription created
 - customer.subscription.updated - Subscription changed (upgrade/downgrade/renewal)
 - customer.subscription.deleted - Subscription canceled/ended
+- customer.subscription.trial_will_end - Trial ending in 3 days (for notifications)
 - invoice.payment_failed - Payment failed
 - invoice.paid - Invoice paid (for tracking)
 """
@@ -106,6 +107,8 @@ async def handle_stripe_webhook(
             await handle_subscription_updated(event["data"]["object"])
         elif event_type == "customer.subscription.deleted":
             await handle_subscription_deleted(event["data"]["object"])
+        elif event_type == "customer.subscription.trial_will_end":
+            await handle_trial_will_end(event["data"]["object"])
         elif event_type == "invoice.payment_failed":
             await handle_payment_failed(event["data"]["object"])
         elif event_type == "invoice.paid":
@@ -191,6 +194,9 @@ async def handle_subscription_created(subscription: Dict[str, Any]):
     # subscription.items.data[0].price.metadata.plan_id
     plan_id = extract_plan_id_from_subscription(subscription)
 
+    # Extract billing interval from price
+    billing_interval = extract_billing_interval_from_subscription(subscription)
+
     # Get billing period dates
     current_period_start = datetime.fromtimestamp(subscription["current_period_start"])
     current_period_end = datetime.fromtimestamp(subscription["current_period_end"])
@@ -208,6 +214,7 @@ async def handle_subscription_created(subscription: Dict[str, Any]):
         "stripe_customer_id": customer_id,
         "stripe_subscription_id": subscription_id,
         "plan_id": plan_id,
+        "billing_interval": billing_interval,
         "status": map_subscription_status(status_value),
         "current_period_start": current_period_start,
         "current_period_end": current_period_end,
@@ -218,7 +225,7 @@ async def handle_subscription_created(subscription: Dict[str, Any]):
     })
 
     logger.info(
-        f"User {supabase_user_id} subscribed to {plan_id} "
+        f"User {supabase_user_id} subscribed to {plan_id} ({billing_interval}) "
         f"(subscription: {subscription_id})"
     )
 
@@ -250,8 +257,9 @@ async def handle_subscription_updated(subscription: Dict[str, Any]):
 
     supabase_user_id = billing.get("user_id")
 
-    # Extract updated plan_id
+    # Extract updated plan_id and billing interval
     plan_id = extract_plan_id_from_subscription(subscription)
+    billing_interval = extract_billing_interval_from_subscription(subscription)
 
     # Get billing period dates
     current_period_start = datetime.fromtimestamp(subscription["current_period_start"])
@@ -265,6 +273,7 @@ async def handle_subscription_updated(subscription: Dict[str, Any]):
     # Update user_billing
     db.upsert_user_billing(supabase_user_id, {
         "plan_id": plan_id,
+        "billing_interval": billing_interval,
         "status": map_subscription_status(status_value),
         "current_period_start": current_period_start,
         "current_period_end": current_period_end,
@@ -273,7 +282,7 @@ async def handle_subscription_updated(subscription: Dict[str, Any]):
         "updated_at": datetime.utcnow(),
     })
 
-    logger.info(f"Updated subscription for user {supabase_user_id}: {plan_id}")
+    logger.info(f"Updated subscription for user {supabase_user_id}: {plan_id} ({billing_interval})")
 
 
 async def handle_subscription_deleted(subscription: Dict[str, Any]):
@@ -310,6 +319,50 @@ async def handle_subscription_deleted(subscription: Dict[str, Any]):
     })
 
     logger.info(f"User {supabase_user_id} downgraded to free plan (subscription deleted)")
+
+
+async def handle_trial_will_end(subscription: Dict[str, Any]):
+    """
+    Handle customer.subscription.trial_will_end event.
+
+    This fires 3 days before a trial ends.
+    Use this to send reminder emails to users.
+    """
+    subscription_id = subscription["id"]
+    customer_id = subscription["customer"]
+    trial_end = subscription.get("trial_end")
+
+    trial_end_date = None
+    if trial_end:
+        trial_end_date = datetime.fromtimestamp(trial_end)
+
+    logger.info(
+        f"Trial ending soon for subscription {subscription_id}. "
+        f"Trial ends: {trial_end_date}"
+    )
+
+    # Find user
+    billing = db.get_user_billing_by_subscription(subscription_id)
+    if not billing:
+        billing = db.get_user_billing_by_customer(customer_id)
+
+    if not billing:
+        logger.warning(f"Cannot find user for trial_will_end: subscription {subscription_id}")
+        return
+
+    supabase_user_id = billing.get("user_id")
+
+    # Update trial_end in database (in case it changed)
+    if trial_end_date:
+        db.upsert_user_billing(supabase_user_id, {
+            "trial_end": trial_end_date,
+            "updated_at": datetime.utcnow(),
+        })
+
+    logger.info(f"Trial ending soon for user {supabase_user_id}")
+
+    # TODO: Send email notification about trial ending
+    # This could integrate with Brevo/SendGrid to notify the user
 
 
 async def handle_payment_failed(invoice: Dict[str, Any]):
@@ -420,6 +473,34 @@ def extract_plan_id_from_subscription(subscription: Dict[str, Any]) -> str:
 
     logger.warning("Could not extract plan_id from subscription, defaulting to 'free'")
     return "free"
+
+
+def extract_billing_interval_from_subscription(subscription: Dict[str, Any]) -> str:
+    """
+    Extract billing interval from subscription price.
+
+    Looks at: subscription.items.data[0].price.recurring.interval
+
+    Returns:
+        'monthly' or 'yearly' (maps Stripe's 'month'/'year' to our terms)
+    """
+    try:
+        items = subscription.get("items", {}).get("data", [])
+        if items:
+            price = items[0].get("price", {})
+            recurring = price.get("recurring", {})
+            interval = recurring.get("interval")
+
+            if interval == "year":
+                return "yearly"
+            elif interval == "month":
+                return "monthly"
+
+    except Exception as e:
+        logger.error(f"Error extracting billing_interval from subscription: {e}")
+
+    # Default to monthly if we can't determine
+    return "monthly"
 
 
 def map_subscription_status(stripe_status: str) -> str:

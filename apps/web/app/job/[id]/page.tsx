@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { getCurrentUser } from '@/lib/supabaseClient'
-import { getJob, getJobDownloadUrl, cancelJob, retryJob, type Job } from '@/lib/apiClient'
+import { getJob, getJobDownloadUrl, getJobCoverUrl, cancelJob, retryJob, type Job, type CoverArtResponse } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
 // Helper to get friendly voice quality name
@@ -57,6 +57,7 @@ function JobDetailContent() {
   const [cancelling, setCancelling] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [coverUrl, setCoverUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -74,6 +75,18 @@ function JobDetailContent() {
             setAudioUrl(url)
           } catch (err) {
             console.error('Failed to get audio URL:', err)
+          }
+        }
+
+        // Fetch cover URL if job has cover
+        if (jobData.has_cover || jobData.generate_cover) {
+          try {
+            const coverData = await getJobCoverUrl(jobId)
+            if (coverData.has_cover && coverData.cover_url) {
+              setCoverUrl(coverData.cover_url)
+            }
+          } catch (err) {
+            console.error('Failed to get cover URL:', err)
           }
         }
       } catch (err) {
@@ -215,14 +228,35 @@ function JobDetailContent() {
           <div className="space-y-6">
             {/* Header */}
             <GlassCard>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-white mb-2">
-                    {job.title || 'Untitled'}
-                  </h1>
-                  <p className="text-white/60">
-                    Created {formatDate(job.created_at)}
-                  </p>
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                <div className="flex gap-6">
+                  {/* Cover Art */}
+                  {coverUrl ? (
+                    <div className="flex-shrink-0">
+                      <img
+                        src={coverUrl}
+                        alt={`Cover for ${job.title}`}
+                        className="w-32 h-32 object-cover rounded-lg shadow-lg"
+                      />
+                    </div>
+                  ) : job.generate_cover && job.status === 'processing' ? (
+                    <div className="w-32 h-32 bg-af-card rounded-lg flex items-center justify-center flex-shrink-0">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-af-purple mx-auto mb-2"></div>
+                        <p className="text-xs text-white/40">Generating cover...</p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Title and metadata */}
+                  <div>
+                    <h1 className="text-2xl font-bold text-white mb-2">
+                      {job.title || 'Untitled'}
+                    </h1>
+                    <p className="text-white/60">
+                      Created {formatDate(job.created_at)}
+                    </p>
+                  </div>
                 </div>
 
                 <div

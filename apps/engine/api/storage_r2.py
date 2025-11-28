@@ -29,9 +29,9 @@ class R2Storage:
         self.endpoint = os.getenv("R2_ENDPOINT")
         self.public_url = os.getenv("R2_PUBLIC_URL", "")
 
-        # Bucket names
-        self.manuscripts_bucket = os.getenv("R2_BUCKET_MANUSCRIPTS", "manuscripts")
-        self.audiobooks_bucket = os.getenv("R2_BUCKET_AUDIOBOOKS", "audiobooks")
+        # Bucket names (default to authorflow-audio for both)
+        self.manuscripts_bucket = os.getenv("R2_BUCKET_MANUSCRIPTS", "authorflow-audio")
+        self.audiobooks_bucket = os.getenv("R2_BUCKET_AUDIOBOOKS", "authorflow-audio")
 
         # Validate required config
         if not all([self.account_id, self.access_key_id, self.secret_access_key]):

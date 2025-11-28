@@ -21,7 +21,7 @@ try:
 except ImportError:
     PYDUB_AVAILABLE = False
 
-from core.chapter_parser import clean_text, detect_character_dialogue
+from ..core.chapter_parser import clean_text, detect_character_dialogue
 
 
 class DualVoicePipeline:

@@ -21,11 +21,21 @@ from .worker import enqueue_job, worker_loop, get_queue_status, recover_pending_
 from .billing.routes import router as billing_router
 from .billing.webhook import router as billing_webhook_router
 from .billing.entitlements import get_plan_entitlements, PlanId
+from .google_drive import (
+    GoogleDriveClient,
+    get_oauth_url,
+    exchange_code_for_tokens,
+    refresh_access_token,
+    is_google_drive_configured,
+)
 
 # Load environment variables (Railway provides these directly, .env is for local dev)
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path)
+
+# Admin emails (comma-separated) - these users bypass billing limits
+ADMIN_EMAILS = [email.strip().lower() for email in os.getenv("ADMIN_EMAILS", "").split(",") if email.strip()]
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -49,6 +59,34 @@ app.add_middleware(
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def is_user_admin(user_info: Optional[Dict[str, Any]]) -> bool:
+    """
+    Check if user has admin privileges.
+
+    Admin status can be granted via:
+    1. user_metadata.role == "admin" in Supabase
+    2. Email in ADMIN_EMAILS environment variable
+    """
+    if not user_info:
+        return False
+
+    # Check user_metadata for role
+    user_metadata = user_info.get("user_metadata", {}) or {}
+    if user_metadata.get("role") == "admin":
+        return True
+
+    # Check email against admin list
+    user_email = (user_info.get("email") or "").lower()
+    if user_email and user_email in ADMIN_EMAILS:
+        return True
+
+    return False
+
+
+# ============================================================================
 # PYDANTIC MODELS (Request/Response Schemas)
 # ============================================================================
 
@@ -64,7 +102,7 @@ class JobCreateRequest(BaseModel):
     """Create new audiobook job"""
     title: str = Field(..., min_length=1, max_length=200)
     author: Optional[str] = Field(None, max_length=200)
-    source_type: str = Field(..., description="upload or paste (google_drive and url coming soon)")
+    source_type: str = Field(..., description="upload, paste, or google_drive")
     source_path: Optional[str] = Field(None, description="Storage path if uploaded, null if pasted")
     manuscript_text: Optional[str] = Field(None, description="Text content if pasted")
     mode: str = Field(..., description="single_voice, dual_voice, or findaway")
@@ -82,7 +120,11 @@ class JobCreateRequest(BaseModel):
     isbn: Optional[str] = Field(None, description="ISBN (findaway)")
     publisher: Optional[str] = Field(None, description="Publisher name (findaway)")
     sample_style: Optional[str] = Field(default="default", description="'default' or 'spicy' for romance (findaway)")
-    cover_vibe: Optional[str] = Field(None, description="Visual vibe for AI cover generation (findaway)")
+
+    # Cover art generation options
+    generate_cover: bool = Field(default=False, description="Generate AI cover art for this audiobook")
+    cover_vibe: Optional[str] = Field(None, description="Visual vibe for AI cover generation")
+    cover_image_provider: Optional[str] = Field(None, description="openai or banana (uses env default if not set)")
 
     class Config:
         json_schema_extra = {
@@ -134,10 +176,15 @@ class JobResponse(BaseModel):
     isbn: Optional[str] = None
     publisher: Optional[str] = None
     sample_style: Optional[str] = None
-    cover_vibe: Optional[str] = None
     package_type: Optional[str] = None
     section_count: Optional[int] = None
+
+    # Cover art fields
+    generate_cover: Optional[bool] = None
+    cover_vibe: Optional[str] = None
+    cover_image_provider: Optional[str] = None
     has_cover: Optional[bool] = None
+    cover_image_path: Optional[str] = None
 
 
 class VoiceInfo(BaseModel):
@@ -213,12 +260,12 @@ async def create_job(
 
     Requires authentication. The job will be queued for processing.
     """
-    # Validate source_type - only upload and paste are currently supported
-    if request.source_type not in ["upload", "paste"]:
+    # Validate source_type
+    if request.source_type not in ["upload", "paste", "google_drive"]:
         raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=f"Source type '{request.source_type}' is not yet implemented. "
-                   f"Currently supported: 'upload' or 'paste'. Google Drive and URL import coming soon."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Source type '{request.source_type}' is not supported. "
+                   f"Supported types: 'upload', 'paste', or 'google_drive'."
         )
 
     # Validate mode
@@ -250,16 +297,22 @@ async def create_job(
 
     # Get user info to check for admin role
     user_info = db.get_user(user_id)
-    user_metadata = {}
-    if user_info and user_info.get("raw_user_meta_data"):
-        user_metadata = user_info["raw_user_meta_data"]
-
-    is_admin = user_metadata.get("role") == "admin"
+    is_admin = is_user_admin(user_info)
 
     if not is_admin:
         # Get user's billing info
         billing_info = db.get_user_billing(user_id)
         plan_id = billing_info.get("plan_id", "free") if billing_info else "free"
+        subscription_status = billing_info.get("status", "inactive") if billing_info else "inactive"
+
+        # Check subscription status - block if trial expired or subscription canceled
+        # Valid statuses that allow access: active, trialing
+        # Invalid statuses: past_due, canceled, unpaid, inactive
+        if plan_id != "free" and subscription_status not in ("active", "trialing"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Your subscription is {subscription_status}. Please update your payment method or resubscribe to continue creating audiobooks."
+            )
 
         # Get plan entitlements
         entitlements = get_plan_entitlements(plan_id)
@@ -325,7 +378,10 @@ async def create_job(
         "isbn": request.isbn,
         "publisher": request.publisher,
         "sample_style": request.sample_style,
+        # Cover art generation
+        "generate_cover": request.generate_cover,
         "cover_vibe": request.cover_vibe,
+        "cover_image_provider": request.cover_image_provider,
     }
 
     job = db.create_job(job_data)
@@ -397,15 +453,20 @@ async def create_job_with_upload(
     # BILLING: Check plan limits before creating job
     # ==========================================================================
     user_info = db.get_user(user_id)
-    user_metadata = {}
-    if user_info and user_info.get("raw_user_meta_data"):
-        user_metadata = user_info["raw_user_meta_data"]
-
-    is_admin = user_metadata.get("role") == "admin"
+    is_admin = is_user_admin(user_info)
 
     if not is_admin:
         billing_info = db.get_user_billing(user_id)
         plan_id = billing_info.get("plan_id", "free") if billing_info else "free"
+        subscription_status = billing_info.get("status", "inactive") if billing_info else "inactive"
+
+        # Check subscription status - block if trial expired or subscription canceled
+        if plan_id != "free" and subscription_status not in ("active", "trialing"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Your subscription is {subscription_status}. Please update your payment method or resubscribe to continue creating audiobooks."
+            )
+
         entitlements = get_plan_entitlements(plan_id)
 
         if entitlements.max_projects_per_month is not None:
@@ -894,6 +955,441 @@ app.include_router(billing_webhook_router)
 
 
 # ============================================================================
+# GOOGLE DRIVE INTEGRATION ENDPOINTS
+# ============================================================================
+
+class GoogleDriveAuthUrlResponse(BaseModel):
+    """Google Drive OAuth URL response"""
+    url: str
+    state: str
+
+
+class GoogleDriveFileInfo(BaseModel):
+    """Google Drive file information"""
+    id: str
+    name: str
+    mime_type: str
+    size: Optional[int] = None
+    created_time: Optional[str] = None
+    modified_time: Optional[str] = None
+    icon_link: Optional[str] = None
+    web_view_link: Optional[str] = None
+
+
+class GoogleDriveFilesResponse(BaseModel):
+    """Google Drive files list response"""
+    files: List[GoogleDriveFileInfo]
+    next_page_token: Optional[str] = None
+
+
+class GoogleDriveImportResponse(BaseModel):
+    """Google Drive import result"""
+    source_type: str = "google_drive"
+    source_path: str
+    title: str
+    word_count: int
+    file_size_bytes: int
+
+
+@app.get(
+    "/google-drive/auth-url",
+    response_model=GoogleDriveAuthUrlResponse,
+    summary="Get Google Drive OAuth URL",
+    tags=["Google Drive"],
+)
+async def get_google_drive_auth_url(
+    user_id: str = Depends(get_current_user)
+) -> GoogleDriveAuthUrlResponse:
+    """
+    Get the Google OAuth authorization URL.
+
+    The frontend should redirect the user to this URL to complete Google Drive authorization.
+    After authorization, Google will redirect back to the callback URL with an authorization code.
+    """
+    if not is_google_drive_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Drive integration is not configured. Contact support."
+        )
+
+    import secrets
+    state = f"{user_id}:{secrets.token_urlsafe(16)}"
+
+    try:
+        auth_url = get_oauth_url(state=state)
+        return GoogleDriveAuthUrlResponse(url=auth_url, state=state)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate auth URL: {str(e)}"
+        )
+
+
+@app.get(
+    "/google-drive/callback",
+    summary="Google Drive OAuth Callback",
+    tags=["Google Drive"],
+)
+async def google_drive_oauth_callback(
+    code: str,
+    state: str,
+    error: Optional[str] = None,
+):
+    """
+    Handle Google OAuth callback.
+
+    This endpoint is called by Google after the user authorizes access.
+    It exchanges the authorization code for access tokens and stores them.
+    Then redirects back to the frontend with success/failure status.
+    """
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    if error:
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard?googleDrive=error&message={error}"
+        )
+
+    # Extract user_id from state
+    try:
+        user_id = state.split(":")[0]
+    except:
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard?googleDrive=error&message=invalid_state"
+        )
+
+    try:
+        # Exchange code for tokens
+        tokens = await exchange_code_for_tokens(code)
+
+        # Store tokens in database (in user's google_drive_tokens)
+        db.store_google_drive_tokens(user_id, {
+            "access_token": tokens.get("access_token"),
+            "refresh_token": tokens.get("refresh_token"),
+            "expires_in": tokens.get("expires_in"),
+            "token_type": tokens.get("token_type"),
+        })
+
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard?googleDrive=connected"
+        )
+    except Exception as e:
+        print(f"Google Drive OAuth error: {e}")
+        return RedirectResponse(
+            url=f"{frontend_url}/dashboard?googleDrive=error&message=token_exchange_failed"
+        )
+
+
+@app.get(
+    "/google-drive/status",
+    summary="Check Google Drive connection status",
+    tags=["Google Drive"],
+)
+async def get_google_drive_status(
+    user_id: str = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Check if the user has connected their Google Drive.
+    """
+    if not is_google_drive_configured():
+        return {
+            "configured": False,
+            "connected": False,
+            "message": "Google Drive integration is not configured on this server."
+        }
+
+    tokens = db.get_google_drive_tokens(user_id)
+    connected = tokens is not None and tokens.get("access_token") is not None
+
+    return {
+        "configured": True,
+        "connected": connected,
+    }
+
+
+@app.get(
+    "/google-drive/files",
+    response_model=GoogleDriveFilesResponse,
+    summary="List Google Drive Files",
+    tags=["Google Drive"],
+)
+async def list_google_drive_files(
+    user_id: str = Depends(get_current_user),
+    page_token: Optional[str] = None,
+    page_size: int = 20,
+) -> GoogleDriveFilesResponse:
+    """
+    List files from the user's Google Drive that are suitable as manuscripts.
+
+    Returns Google Docs, DOCX, PDF, and TXT files, sorted by most recently modified.
+    """
+    if not is_google_drive_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Drive integration is not configured."
+        )
+
+    # Get user's tokens
+    tokens = db.get_google_drive_tokens(user_id)
+    if not tokens or not tokens.get("access_token"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google Drive not connected. Please authorize first."
+        )
+
+    try:
+        client = GoogleDriveClient(tokens["access_token"])
+        result = await client.list_files(page_size=page_size, page_token=page_token)
+
+        files = [
+            GoogleDriveFileInfo(
+                id=f["id"],
+                name=f["name"],
+                mime_type=f.get("mimeType", ""),
+                size=int(f["size"]) if f.get("size") else None,
+                created_time=f.get("createdTime"),
+                modified_time=f.get("modifiedTime"),
+                icon_link=f.get("iconLink"),
+                web_view_link=f.get("webViewLink"),
+            )
+            for f in result.get("files", [])
+        ]
+
+        return GoogleDriveFilesResponse(
+            files=files,
+            next_page_token=result.get("nextPageToken")
+        )
+    except Exception as e:
+        # Check if it's a token error
+        error_str = str(e).lower()
+        if "401" in error_str or "unauthorized" in error_str or "invalid" in error_str:
+            # Try to refresh the token
+            if tokens.get("refresh_token"):
+                try:
+                    new_tokens = await refresh_access_token(tokens["refresh_token"])
+                    db.store_google_drive_tokens(user_id, {
+                        **tokens,
+                        "access_token": new_tokens.get("access_token"),
+                    })
+                    # Retry with new token
+                    client = GoogleDriveClient(new_tokens["access_token"])
+                    result = await client.list_files(page_size=page_size, page_token=page_token)
+                    files = [
+                        GoogleDriveFileInfo(
+                            id=f["id"],
+                            name=f["name"],
+                            mime_type=f.get("mimeType", ""),
+                            size=int(f["size"]) if f.get("size") else None,
+                            created_time=f.get("createdTime"),
+                            modified_time=f.get("modifiedTime"),
+                            icon_link=f.get("iconLink"),
+                            web_view_link=f.get("webViewLink"),
+                        )
+                        for f in result.get("files", [])
+                    ]
+                    return GoogleDriveFilesResponse(
+                        files=files,
+                        next_page_token=result.get("nextPageToken")
+                    )
+                except Exception as refresh_error:
+                    # Clear tokens and require re-auth
+                    db.clear_google_drive_tokens(user_id)
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Google Drive authorization expired. Please reconnect."
+                    )
+            else:
+                db.clear_google_drive_tokens(user_id)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Google Drive authorization expired. Please reconnect."
+                )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list Google Drive files: {str(e)}"
+        )
+
+
+class GoogleDriveImportRequest(BaseModel):
+    """Request to import a file from Google Drive"""
+    file_id: str
+
+
+@app.post(
+    "/google-drive/import",
+    response_model=GoogleDriveImportResponse,
+    summary="Import File from Google Drive",
+    tags=["Google Drive"],
+)
+async def import_google_drive_file(
+    request: GoogleDriveImportRequest,
+    user_id: str = Depends(get_current_user),
+) -> GoogleDriveImportResponse:
+    """
+    Import a file from Google Drive as a manuscript.
+
+    Downloads the file, converts it to text, and uploads it to R2 storage.
+    Returns the storage path that can be used to create a job.
+    """
+    if not is_google_drive_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Drive integration is not configured."
+        )
+
+    # Get user's tokens
+    tokens = db.get_google_drive_tokens(user_id)
+    if not tokens or not tokens.get("access_token"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google Drive not connected. Please authorize first."
+        )
+
+    try:
+        client = GoogleDriveClient(tokens["access_token"])
+
+        # Get file metadata
+        file_metadata = await client.get_file_metadata(request.file_id)
+        file_name = file_metadata.get("name", "Untitled")
+        mime_type = file_metadata.get("mimeType", "")
+
+        # Validate mime type
+        supported_types = [
+            "application/vnd.google-apps.document",
+            "text/plain",
+            "text/markdown",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/pdf",
+            "application/rtf",
+        ]
+
+        if mime_type not in supported_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {mime_type}. "
+                       f"Supported types: Google Docs, TXT, DOCX, PDF, RTF"
+            )
+
+        # Download and convert to text
+        text_content = await client.download_file_as_text(request.file_id, mime_type)
+
+        if not text_content or not text_content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The file appears to be empty or could not be converted to text."
+            )
+
+        # Upload to R2 storage
+        filename = f"{file_name.replace(' ', '_')}.txt"
+        source_path = db.upload_manuscript(
+            user_id=user_id,
+            filename=filename,
+            file_content=text_content.encode("utf-8")
+        )
+
+        # Calculate metrics
+        word_count = len(text_content.split())
+        file_size_bytes = len(text_content.encode("utf-8"))
+
+        return GoogleDriveImportResponse(
+            source_type="google_drive",
+            source_path=source_path,
+            title=file_name.replace(".docx", "").replace(".pdf", "").replace(".txt", ""),
+            word_count=word_count,
+            file_size_bytes=file_size_bytes,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_str = str(e).lower()
+        if "401" in error_str or "unauthorized" in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Google Drive authorization expired. Please reconnect."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to import file: {str(e)}"
+        )
+
+
+@app.delete(
+    "/google-drive/disconnect",
+    summary="Disconnect Google Drive",
+    tags=["Google Drive"],
+)
+async def disconnect_google_drive(
+    user_id: str = Depends(get_current_user),
+) -> Dict[str, str]:
+    """
+    Disconnect Google Drive integration for the current user.
+    Removes stored tokens.
+    """
+    db.clear_google_drive_tokens(user_id)
+    return {"message": "Google Drive disconnected successfully"}
+
+
+# ============================================================================
+# COVER ART ENDPOINTS
+# ============================================================================
+
+class CoverArtResponse(BaseModel):
+    """Cover art response"""
+    has_cover: bool
+    cover_url: Optional[str] = None
+    cover_path: Optional[str] = None
+
+
+@app.get(
+    "/jobs/{job_id}/cover",
+    response_model=CoverArtResponse,
+    summary="Get Cover Image URL",
+    tags=["Jobs"],
+)
+async def get_job_cover_url(
+    job_id: str,
+    user_id: str = Depends(get_current_user)
+) -> CoverArtResponse:
+    """
+    Get cover art information for a job.
+
+    Returns has_cover=false if no cover is available.
+    If has_cover=true, cover_url contains a presigned URL (expires in 1 hour).
+    """
+    job = db.get_job(job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    # Verify ownership
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this job"
+        )
+
+    # Check if job has a cover
+    if not job.get("has_cover") or not job.get("cover_image_path"):
+        return CoverArtResponse(has_cover=False)
+
+    # Get presigned URL
+    try:
+        cover_url = db.get_download_url(job["cover_image_path"], expires_in=3600)
+        return CoverArtResponse(
+            has_cover=True,
+            cover_url=cover_url,
+            cover_path=job.get("cover_image_path")
+        )
+    except Exception as e:
+        print(f"Failed to generate cover URL for job {job_id}: {e}")
+        return CoverArtResponse(has_cover=False)
+
+
+# ============================================================================
 # WORKER HEALTH ENDPOINT
 # ============================================================================
 
@@ -991,11 +1487,7 @@ async def get_system_status(
     """
     # Check admin role
     user_info = db.get_user(user_id)
-    user_metadata = {}
-    if user_info and user_info.get("raw_user_meta_data"):
-        user_metadata = user_info["raw_user_meta_data"]
-
-    is_admin = user_metadata.get("role") == "admin"
+    is_admin = is_user_admin(user_info)
 
     if not is_admin:
         raise HTTPException(
@@ -1092,6 +1584,165 @@ async def get_system_status(
         # Recent Errors
         recent_errors=recent_errors,
     )
+
+
+# ============================================================================
+# DEBUG/SELF-TEST ENDPOINT (Disabled by default in production)
+# ============================================================================
+
+# Enable with ENGINE_SELF_TEST_ENABLED=true
+ENGINE_SELF_TEST_ENABLED = os.getenv("ENGINE_SELF_TEST_ENABLED", "false").lower() == "true"
+
+
+class SelfTestResponse(BaseModel):
+    """Response from self-test endpoint"""
+    status: str  # "ok" | "failed"
+    job_id: Optional[str] = None
+    audio_files: List[str] = []
+    final_path_exists: bool = False
+    duration_seconds: int = 0
+    error: Optional[str] = None
+    test_mode: str = "stub"  # "stub" | "real_openai"
+    details: Dict[str, Any] = {}
+
+
+@app.post(
+    "/debug/self-test",
+    response_model=SelfTestResponse,
+    tags=["Debug"],
+    summary="Run pipeline self-test",
+    description="""
+    Debug endpoint to test the audiobook generation pipeline.
+    Disabled by default - enable with ENGINE_SELF_TEST_ENABLED=true.
+
+    This endpoint:
+    1. Creates a temporary job with a short test manuscript
+    2. Runs the single-voice pipeline (stub or real OpenAI)
+    3. Returns detailed results for debugging
+    """,
+)
+async def run_self_test(
+    use_real_tts: bool = False,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Run a self-test of the audiobook pipeline.
+
+    Args:
+        use_real_tts: If true, use real OpenAI TTS (costs money). If false, generate stub audio.
+    """
+    import tempfile
+    import uuid
+    from pathlib import Path
+
+    # Check if self-test is enabled
+    if not ENGINE_SELF_TEST_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Self-test endpoint is disabled. Set ENGINE_SELF_TEST_ENABLED=true to enable."
+        )
+
+    test_job_id = f"test-{uuid.uuid4().hex[:8]}"
+    test_manuscript = """
+    Chapter 1: The Beginning
+
+    This is a short test manuscript for the audiobook pipeline self-test.
+    It contains enough text to verify the TTS system is working correctly.
+
+    The quick brown fox jumps over the lazy dog. This sentence contains
+    every letter of the alphabet and is commonly used for testing.
+
+    Chapter 2: The End
+
+    This concludes our brief test. If you can hear this, the pipeline works!
+    """
+
+    output_dir = None
+    result = SelfTestResponse(
+        status="failed",
+        job_id=test_job_id,
+        test_mode="real_openai" if use_real_tts else "stub",
+    )
+
+    try:
+        # Create temp directory
+        output_dir = Path(tempfile.gettempdir()) / "authorflow_selftest" / test_job_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        result.details["output_dir"] = str(output_dir)
+
+        if use_real_tts:
+            # Use real OpenAI TTS
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY not configured")
+
+            from ..pipelines.standard_single_voice import generate_single_voice_audiobook
+
+            audio_files = generate_single_voice_audiobook(
+                manuscript_text=test_manuscript,
+                output_dir=output_dir,
+                api_key=api_key,
+                voice_id="alloy",
+                tts_provider="openai",
+                book_title="SelfTest",
+            )
+
+            result.audio_files = [str(f) for f in audio_files]
+            result.final_path_exists = len(audio_files) > 0 and Path(audio_files[-1]).exists()
+
+            if result.final_path_exists:
+                from .worker import get_audio_duration
+                result.duration_seconds = get_audio_duration(Path(audio_files[-1]))
+
+        else:
+            # Stub mode - just verify imports and structure work
+            try:
+                from ..pipelines.standard_single_voice import SingleVoicePipeline
+                from ..core.chapter_parser import split_into_chapters
+                from ..core.advanced_chunker import chunk_chapter_advanced
+
+                result.details["imports"] = "ok"
+
+                # Parse chapters
+                chapters = split_into_chapters(test_manuscript)
+                result.details["chapters_parsed"] = len(chapters)
+
+                # Chunk first chapter
+                if chapters:
+                    chunks = chunk_chapter_advanced(chapters[0]["text"], 700, 5000)
+                    result.details["chunks_created"] = len(chunks)
+
+                # Create stub audio file
+                stub_audio_path = output_dir / "SelfTest_STUB.mp3"
+                stub_audio_path.write_bytes(b"\x00" * 1000)  # Dummy bytes
+
+                result.audio_files = [str(stub_audio_path)]
+                result.final_path_exists = stub_audio_path.exists()
+                result.details["stub_file_size"] = stub_audio_path.stat().st_size
+
+            except ImportError as e:
+                result.error = f"Import error: {e}"
+                result.details["import_error"] = str(e)
+                return result
+
+        result.status = "ok" if result.final_path_exists else "failed"
+        if not result.final_path_exists:
+            result.error = "Final audio file was not created"
+
+    except Exception as e:
+        import traceback
+        result.status = "failed"
+        result.error = f"{type(e).__name__}: {str(e)}"
+        result.details["traceback"] = traceback.format_exc()
+
+    finally:
+        # Clean up (optional - keep for debugging)
+        # if output_dir and output_dir.exists():
+        #     import shutil
+        #     shutil.rmtree(output_dir)
+        pass
+
+    return result
 
 
 # ============================================================================
