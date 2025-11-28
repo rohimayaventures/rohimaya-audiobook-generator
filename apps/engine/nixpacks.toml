@@ -13,8 +13,10 @@ nixPkgs = ["python311", "ffmpeg"]
 cmds = ["pip install -r apps/engine/requirements.txt"]
 
 # Start the FastAPI server
+# PYTHONPATH is set to apps/engine so relative imports like ..pipelines work
 [start]
-cmd = "cd apps/engine && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+cmd = "cd apps/engine && PYTHONPATH=. uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 
 [variables]
 PYTHON_VERSION = "3.11"
+PYTHONPATH = "apps/engine"
