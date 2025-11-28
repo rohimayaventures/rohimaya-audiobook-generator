@@ -62,6 +62,13 @@ class CreateCheckoutSessionRequest(BaseModel):
         }
 
 
+# =============================================================================
+# FREE TRIAL CONFIGURATION
+# =============================================================================
+# All new subscriptions get a free trial period
+FREE_TRIAL_DAYS = 7  # 7-day free trial for all plans
+
+
 class CheckoutSessionResponse(BaseModel):
     """Response containing Stripe Checkout URL"""
     url: str
@@ -181,7 +188,11 @@ async def create_checkout(
     success_url = f"{base_url}/billing/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{base_url}/billing/cancel"
 
-    # Create checkout session
+    # Check if user has ever had a subscription (no trial for returning users)
+    has_previous_subscription = billing and billing.get("stripe_subscription_id")
+    trial_days = FREE_TRIAL_DAYS if not has_previous_subscription else None
+
+    # Create checkout session with free trial for new subscribers
     try:
         session = create_checkout_session(
             customer_id=customer_id,
@@ -189,6 +200,7 @@ async def create_checkout(
             success_url=success_url,
             cancel_url=cancel_url,
             supabase_user_id=user_id,
+            trial_days=trial_days,
         )
     except Exception as e:
         logger.error(f"Failed to create checkout session: {e}")
