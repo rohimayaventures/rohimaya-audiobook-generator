@@ -663,11 +663,19 @@ async def delete_job(
         )
 
     # Delete storage files if they exist
-    if job["source_path"]:
-        db.delete_storage_file("manuscripts", job["source_path"])
+    # Wrap in try-except to ensure job deletion succeeds even if storage cleanup fails
+    # (e.g., files from old bucket naming convention or already deleted files)
+    try:
+        if job["source_path"]:
+            db.delete_storage_file("manuscripts", job["source_path"])
+    except Exception as e:
+        print(f"⚠️ Failed to delete manuscript for job {job_id}: {e}")
 
-    if job["audio_path"]:
-        db.delete_storage_file("audiobooks", job["audio_path"])
+    try:
+        if job["audio_path"]:
+            db.delete_storage_file("audiobooks", job["audio_path"])
+    except Exception as e:
+        print(f"⚠️ Failed to delete audiobook for job {job_id}: {e}")
 
     # Delete job from database (CASCADE deletes job_files)
     db.delete_job(job_id)

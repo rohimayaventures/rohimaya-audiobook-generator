@@ -249,7 +249,7 @@ class R2Storage:
             object_key: Full object key path
 
         Returns:
-            True if deleted successfully
+            True if deleted successfully or object doesn't exist
         """
         try:
             self.client.delete_object(
@@ -260,8 +260,21 @@ class R2Storage:
             return True
 
         except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            # NoSuchKey and 404 mean object doesn't exist - consider success
+            if error_code in ['NoSuchKey', '404', 'NotFound']:
+                print(f"⚠️ Object not found (already deleted): {bucket}/{object_key}")
+                return True
+            # NoSuchBucket means bucket doesn't exist - consider success for cleanup
+            if error_code in ['NoSuchBucket']:
+                print(f"⚠️ Bucket not found (old data): {bucket}/{object_key}")
+                return True
             print(f"❌ Failed to delete {bucket}/{object_key}: {e}")
             return False
+        except Exception as e:
+            # Catch any other errors and log but don't fail
+            print(f"⚠️ Unexpected error deleting {bucket}/{object_key}: {e}")
+            return True  # Return True to allow job deletion to proceed
 
     def delete_manuscript(self, object_key: str) -> bool:
         """Delete manuscript from R2"""
