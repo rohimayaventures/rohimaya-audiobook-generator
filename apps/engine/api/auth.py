@@ -10,7 +10,6 @@ Security features:
 
 import os
 import time
-import base64
 from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
@@ -37,14 +36,9 @@ class AuthService:
         if not self.supabase_url or not jwt_secret_raw:
             raise ValueError("Missing SUPABASE_URL or SUPABASE_JWT_SECRET")
 
-        # Supabase JWT secrets are base64 encoded - decode for python-jose
-        # Handle both base64 encoded and raw secrets for flexibility
-        try:
-            # Try to decode as base64
-            self.jwt_secret = base64.b64decode(jwt_secret_raw)
-        except Exception:
-            # If decoding fails, use as-is (might be raw secret)
-            self.jwt_secret = jwt_secret_raw
+        # Supabase JWT secret - use as-is (the base64 string IS the secret)
+        # Supabase signs tokens with the raw secret string, not decoded bytes
+        self.jwt_secret = jwt_secret_raw
 
     def verify_token(self, authorization: Optional[str] = Header(None)) -> str:
         """
