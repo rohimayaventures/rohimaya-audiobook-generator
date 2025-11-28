@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
@@ -336,6 +336,139 @@ async def create_job(
             db.increment_user_usage(user_id, projects=1, minutes=0)
         except Exception as e:
             # Log but don't fail - usage tracking shouldn't block job creation
+            print(f"Warning: Failed to increment usage for user {user_id}: {e}")
+
+    # Enqueue job for processing
+    await enqueue_job(job["id"])
+
+    return JobResponse(**job)
+
+
+@app.post(
+    "/jobs/upload",
+    response_model=JobResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Audiobook Job with File Upload",
+    tags=["Jobs"],
+)
+async def create_job_with_upload(
+    file: UploadFile = File(..., description="Manuscript file (TXT, DOCX, PDF)"),
+    title: str = Form(..., description="Audiobook title"),
+    source_type: str = Form(default="upload", description="Source type"),
+    mode: str = Form(default="single_voice", description="Processing mode"),
+    tts_provider: str = Form(default="openai", description="TTS provider"),
+    narrator_voice_id: str = Form(default="alloy", description="Narrator voice ID"),
+    audio_format: str = Form(default="mp3", description="Output audio format"),
+    audio_bitrate: str = Form(default="128k", description="Audio bitrate"),
+    user_id: str = Depends(get_current_user)
+) -> JobResponse:
+    """
+    Create a new audiobook generation job with file upload.
+
+    This endpoint accepts multipart/form-data for file uploads.
+    The file will be stored in R2 and the job queued for processing.
+
+    Requires authentication.
+    """
+    # Validate mode
+    if mode not in ["single_voice", "dual_voice", "findaway"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mode must be 'single_voice', 'dual_voice', or 'findaway'"
+        )
+
+    # Validate TTS provider
+    if tts_provider not in ["openai"]:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"TTS provider '{tts_provider}' is not yet implemented. Currently supported: 'openai'."
+        )
+
+    # Validate file type
+    allowed_extensions = ['.txt', '.docx', '.pdf', '.md']
+    file_ext = Path(file.filename).suffix.lower() if file.filename else ''
+    if file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
+        )
+
+    # ==========================================================================
+    # BILLING: Check plan limits before creating job
+    # ==========================================================================
+    user_info = db.get_user(user_id)
+    user_metadata = {}
+    if user_info and user_info.get("raw_user_meta_data"):
+        user_metadata = user_info["raw_user_meta_data"]
+
+    is_admin = user_metadata.get("role") == "admin"
+
+    if not is_admin:
+        billing_info = db.get_user_billing(user_id)
+        plan_id = billing_info.get("plan_id", "free") if billing_info else "free"
+        entitlements = get_plan_entitlements(plan_id)
+
+        if entitlements.max_projects_per_month is not None:
+            usage = db.get_user_usage_current_period(user_id)
+            current_projects = usage.get("projects_created", 0) if usage else 0
+
+            if current_projects >= entitlements.max_projects_per_month:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Plan limit reached: {plan_id.title()} plan allows {entitlements.max_projects_per_month} projects per month. "
+                           f"Please upgrade your plan to create more audiobooks."
+                )
+
+        if mode == "findaway" and not entitlements.findaway_package:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Findaway packages are not available on the Free plan. Please upgrade to Creator or higher."
+            )
+
+    # Read file content
+    try:
+        file_content = await file.read()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read file: {str(e)}"
+        )
+
+    # Upload to R2 storage
+    try:
+        source_path = db.upload_manuscript(
+            user_id=user_id,
+            filename=file.filename or "manuscript.txt",
+            file_content=file_content
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload file: {str(e)}"
+        )
+
+    # Create job in database
+    job_data = {
+        "user_id": user_id,
+        "status": "pending",
+        "mode": mode,
+        "title": title,
+        "source_type": "upload",
+        "source_path": source_path,
+        "tts_provider": tts_provider,
+        "narrator_voice_id": narrator_voice_id,
+        "audio_format": audio_format,
+        "audio_bitrate": audio_bitrate,
+        "progress_percent": 0.0,
+    }
+
+    job = db.create_job(job_data)
+
+    # Increment usage counter
+    if not is_admin:
+        try:
+            db.increment_user_usage(user_id, projects=1, minutes=0)
+        except Exception as e:
             print(f"Warning: Failed to increment usage for user {user_id}: {e}")
 
     # Enqueue job for processing

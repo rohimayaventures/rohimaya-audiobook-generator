@@ -206,19 +206,19 @@ export async function createJob(
     throw new Error('Not authenticated. Please log in.')
   }
 
-  // If there's a file, use FormData
+  // If there's a file, use FormData and the /jobs/upload endpoint
   if (file) {
     const formData = new FormData()
     formData.append('file', file)
-    if (payload.title) formData.append('title', payload.title)
+    formData.append('title', payload.title || file.name.replace(/\.[^/.]+$/, ''))
     formData.append('source_type', payload.source_type)
     formData.append('mode', payload.mode)
     formData.append('tts_provider', payload.tts_provider)
     formData.append('narrator_voice_id', payload.narrator_voice_id)
-    if (payload.audio_format) formData.append('audio_format', payload.audio_format)
-    if (payload.audio_bitrate) formData.append('audio_bitrate', payload.audio_bitrate)
+    formData.append('audio_format', payload.audio_format || 'mp3')
+    formData.append('audio_bitrate', payload.audio_bitrate || '128k')
 
-    const response = await fetch(`${baseUrl}/jobs`, {
+    const response = await fetch(`${baseUrl}/jobs/upload`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -227,8 +227,17 @@ export async function createJob(
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Upload failed' }))
-      throw new Error(error.detail || error.message)
+      // Try to parse error response, handle empty bodies
+      let error = { message: 'Upload failed' }
+      try {
+        const text = await response.text()
+        if (text && text.trim()) {
+          error = JSON.parse(text)
+        }
+      } catch {
+        // Ignore JSON parse errors
+      }
+      throw new Error(error.detail || error.message || `HTTP ${response.status}`)
     }
 
     return response.json()
