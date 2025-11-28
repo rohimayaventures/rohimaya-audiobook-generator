@@ -38,6 +38,7 @@ def generate_cover_image(
     author: Optional[str],
     genre: Optional[str] = None,
     vibe: Optional[str] = None,
+    custom_description: Optional[str] = None,
     aspect_ratio: str = "1:1",
     job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -49,6 +50,7 @@ def generate_cover_image(
         author: Author name (optional)
         genre: Book genre (optional, helps with style)
         vibe: Desired visual vibe (e.g., "dark", "romantic", "mysterious")
+        custom_description: User's custom description for the cover image
         aspect_ratio: Image aspect ratio (default "1:1" for audiobook covers)
         job_id: Job ID for organizing storage
 
@@ -71,14 +73,15 @@ def generate_cover_image(
     logger.info(f"  Author: {author}")
     logger.info(f"  Genre: {genre}")
     logger.info(f"  Vibe: {vibe}")
+    logger.info(f"  Custom description: {custom_description[:100] + '...' if custom_description and len(custom_description) > 100 else custom_description}")
 
     if provider == PROVIDER_OPENAI:
-        return _generate_openai_cover(title, author, genre, vibe, aspect_ratio)
+        return _generate_openai_cover(title, author, genre, vibe, custom_description, aspect_ratio)
     elif provider == PROVIDER_BANANA:
-        return _generate_banana_cover(title, author, genre, vibe, aspect_ratio)
+        return _generate_banana_cover(title, author, genre, vibe, custom_description, aspect_ratio)
     else:
         logger.warning(f"Unknown provider '{provider}', falling back to OpenAI")
-        return _generate_openai_cover(title, author, genre, vibe, aspect_ratio)
+        return _generate_openai_cover(title, author, genre, vibe, custom_description, aspect_ratio)
 
 
 def _generate_openai_cover(
@@ -86,6 +89,7 @@ def _generate_openai_cover(
     author: Optional[str],
     genre: Optional[str],
     vibe: Optional[str],
+    custom_description: Optional[str],
     aspect_ratio: str
 ) -> Dict[str, Any]:
     """
@@ -96,6 +100,7 @@ def _generate_openai_cover(
         author: Author name
         genre: Book genre
         vibe: Visual vibe
+        custom_description: User's custom description
         aspect_ratio: Image aspect ratio
 
     Returns:
@@ -111,8 +116,8 @@ def _generate_openai_cover(
     # Get model
     model = os.getenv("COVER_IMAGE_MODEL", DEFAULT_MODELS[PROVIDER_OPENAI])
 
-    # Build prompt
-    prompt = _build_cover_prompt(title, author, genre, vibe)
+    # Build prompt - use custom description if provided
+    prompt = _build_cover_prompt(title, author, genre, vibe, custom_description)
 
     logger.info(f"Using OpenAI model: {model}")
     logger.debug(f"Cover prompt: {prompt}")
@@ -167,6 +172,7 @@ def _generate_banana_cover(
     author: Optional[str],
     genre: Optional[str],
     vibe: Optional[str],
+    custom_description: Optional[str],
     aspect_ratio: str
 ) -> Dict[str, Any]:
     """
@@ -180,6 +186,7 @@ def _generate_banana_cover(
         author: Author name
         genre: Book genre
         vibe: Visual vibe
+        custom_description: User's custom description
         aspect_ratio: Image aspect ratio
 
     Returns:
@@ -197,7 +204,7 @@ def _generate_banana_cover(
         )
 
     model = os.getenv("COVER_IMAGE_MODEL", DEFAULT_MODELS[PROVIDER_BANANA])
-    prompt = _build_cover_prompt(title, author, genre, vibe)
+    prompt = _build_cover_prompt(title, author, genre, vibe, custom_description)
 
     # Map aspect ratio to dimensions
     size_map = {
@@ -297,7 +304,8 @@ def _build_cover_prompt(
     title: str,
     author: Optional[str],
     genre: Optional[str],
-    vibe: Optional[str]
+    vibe: Optional[str],
+    custom_description: Optional[str] = None
 ) -> str:
     """
     Build a prompt for cover image generation.
@@ -307,11 +315,34 @@ def _build_cover_prompt(
         author: Author name
         genre: Book genre
         vibe: Visual vibe
+        custom_description: User's custom description for the cover
 
     Returns:
         Prompt string for image generation
     """
-    # Base prompt
+    # If user provided a custom description, prioritize it
+    if custom_description and custom_description.strip():
+        prompt_parts = [
+            "Professional audiobook cover art",
+            "High quality digital illustration",
+            "Square aspect ratio (1:1)",
+            f"The scene should depict: {custom_description.strip()}",
+        ]
+
+        # Add vibe if specified
+        if vibe:
+            prompt_parts.append(f"Visual style/mood: {vibe}")
+
+        # Add essential constraints
+        prompt_parts.extend([
+            "Premium quality suitable for audiobook platforms",
+            "Leave appropriate space for title typography overlay",
+            "Do NOT include any text, letters, or words in the image",
+        ])
+
+        return ". ".join(prompt_parts)
+
+    # Default prompt building (no custom description)
     prompt_parts = [
         "Professional audiobook cover art",
         "High quality digital illustration",

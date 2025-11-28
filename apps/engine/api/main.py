@@ -124,6 +124,7 @@ class JobCreateRequest(BaseModel):
     # Cover art generation options
     generate_cover: bool = Field(default=False, description="Generate AI cover art for this audiobook")
     cover_vibe: Optional[str] = Field(None, description="Visual vibe for AI cover generation")
+    cover_description: Optional[str] = Field(None, description="Custom description for cover art (user's vision)")
     cover_image_provider: Optional[str] = Field(None, description="openai or banana (uses env default if not set)")
 
     class Config:
@@ -381,6 +382,7 @@ async def create_job(
         # Cover art generation
         "generate_cover": request.generate_cover,
         "cover_vibe": request.cover_vibe,
+        "cover_description": request.cover_description,
         "cover_image_provider": request.cover_image_provider,
     }
 

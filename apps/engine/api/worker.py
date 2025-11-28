@@ -151,7 +151,21 @@ async def process_job(job_id: str):
 
         logger.info(f"[JOB] {job_id} - Downloading manuscript from: {source_path}")
         manuscript_data = db.download_manuscript(source_path)
-        manuscript_text = manuscript_data.decode("utf-8")
+
+        # Try multiple encodings to handle various file formats
+        manuscript_text = None
+        for encoding in ["utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]:
+            try:
+                manuscript_text = manuscript_data.decode(encoding)
+                logger.info(f"[JOB] {job_id} - Decoded manuscript with encoding: {encoding}")
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if manuscript_text is None:
+            # Last resort: decode with errors ignored
+            manuscript_text = manuscript_data.decode("utf-8", errors="ignore")
+            logger.warning(f"[JOB] {job_id} - Decoded manuscript with utf-8 (errors ignored)")
 
         word_count = len(manuscript_text.split())
         logger.info(f"[JOB] {job_id} - Manuscript downloaded: {len(manuscript_text)} chars, ~{word_count} words")

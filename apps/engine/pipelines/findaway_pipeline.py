@@ -158,6 +158,7 @@ def generate_findaway_audiobook(
             author=book_metadata.get("author"),
             genre=book_metadata.get("genre"),
             vibe=book_metadata.get("cover_vibe"),
+            custom_description=book_metadata.get("cover_description"),
         )
 
         cover_filename = get_cover_filename(book_metadata.get("title", "cover"))

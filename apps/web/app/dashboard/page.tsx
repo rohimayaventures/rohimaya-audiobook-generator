@@ -83,6 +83,7 @@ function DashboardContent() {
   // Cover art options
   const [generateCover, setGenerateCover] = useState(false)
   const [coverVibe, setCoverVibe] = useState('dramatic')
+  const [coverDescription, setCoverDescription] = useState('')
 
   // Google Drive state
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatus | null>(null)
@@ -258,7 +259,11 @@ function DashboardContent() {
         ...(inputMode === 'text' ? { manuscript_text: text } : {}),
         ...(inputMode === 'google_drive' && importedManuscriptPath ? { source_path: importedManuscriptPath } : {}),
         // Cover art options
-        ...(generateCover ? { generate_cover: true, cover_vibe: coverVibe } : {}),
+        ...(generateCover ? {
+          generate_cover: true,
+          cover_vibe: coverVibe,
+          ...(coverDescription.trim() ? { cover_description: coverDescription.trim() } : {}),
+        } : {}),
       }
 
       await createJob(payload, inputMode === 'file' ? file! : undefined)
@@ -274,6 +279,7 @@ function DashboardContent() {
       setSelectedDriveFile(null)
       setImportedManuscriptPath(null)
       setGenerateCover(false)
+      setCoverDescription('')
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create job')
     }
@@ -649,21 +655,38 @@ function DashboardContent() {
               </div>
 
               {generateCover && (
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-white/80 mb-2">
-                    Cover Style
-                  </label>
-                  <select
-                    value={coverVibe}
-                    onChange={(e) => setCoverVibe(e.target.value)}
-                    className="input-field"
-                  >
-                    {COVER_VIBES.map((vibe) => (
-                      <option key={vibe.id} value={vibe.id}>
-                        {vibe.name} - {vibe.description}
-                      </option>
-                    ))}
-                  </select>
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-2">
+                      Cover Style
+                    </label>
+                    <select
+                      value={coverVibe}
+                      onChange={(e) => setCoverVibe(e.target.value)}
+                      className="input-field"
+                    >
+                      {COVER_VIBES.map((vibe) => (
+                        <option key={vibe.id} value={vibe.id}>
+                          {vibe.name} - {vibe.description}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-2">
+                      Custom Description <span className="text-white/40">(optional)</span>
+                    </label>
+                    <textarea
+                      value={coverDescription}
+                      onChange={(e) => setCoverDescription(e.target.value)}
+                      placeholder="Describe what you want on your cover... e.g., 'A dark forest with glowing eyes in the shadows' or 'A woman in a red dress standing on a cliff overlooking the ocean at sunset'"
+                      className="input-field min-h-[80px] resize-y"
+                      rows={3}
+                    />
+                    <p className="text-xs text-white/40 mt-1">
+                      Be specific about colors, mood, objects, and style you want
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
