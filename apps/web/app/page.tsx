@@ -14,6 +14,7 @@ import { getCurrentUser } from '@/lib/supabaseClient'
  */
 export default function LandingPage() {
   const [user, setUser] = useState<{ email?: string } | null>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -22,6 +23,13 @@ export default function LandingPage() {
     }
     checkUser()
   }, [])
+
+  const navLinks = [
+    { href: '#features', label: 'Features' },
+    { href: '#demo', label: 'Demo' },
+    { href: '#tutorial', label: 'Tutorial' },
+    { href: '#pricing', label: 'Pricing' },
+  ]
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -32,21 +40,22 @@ export default function LandingPage() {
             <span className="font-serif text-xl font-bold text-gradient">
               AuthorFlow
             </span>
+
+            {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm text-white/70 hover:text-white transition-colors">
-                Features
-              </a>
-              <a href="#demo" className="text-sm text-white/70 hover:text-white transition-colors">
-                Demo
-              </a>
-              <a href="#tutorial" className="text-sm text-white/70 hover:text-white transition-colors">
-                Tutorial
-              </a>
-              <a href="#pricing" className="text-sm text-white/70 hover:text-white transition-colors">
-                Pricing
-              </a>
+              {navLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm text-white/70 hover:text-white transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))}
             </div>
-            <div className="flex items-center gap-4">
+
+            {/* Desktop Auth Buttons */}
+            <div className="hidden md:flex items-center gap-4">
               {user ? (
                 <a
                   href="/dashboard"
@@ -71,7 +80,66 @@ export default function LandingPage() {
                 </>
               )}
             </div>
+
+            {/* Mobile menu button */}
+            <button
+              className="md:hidden p-2 text-white/80 hover:text-white"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle menu"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {mobileMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
           </div>
+
+          {/* Mobile menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden py-4 border-t border-af-card-border">
+              {navLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="block py-2 text-sm font-medium text-white/70 hover:text-white transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.label}
+                </a>
+              ))}
+              <div className="flex gap-4 pt-4 mt-2 border-t border-af-card-border/50">
+                {user ? (
+                  <a
+                    href="/dashboard"
+                    className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Go to Dashboard
+                  </a>
+                ) : (
+                  <>
+                    <a
+                      href="/login"
+                      className="text-sm font-medium text-white/80 hover:text-white transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Log in
+                    </a>
+                    <a
+                      href="/signup"
+                      className="text-sm font-medium px-4 py-2 rounded-lg bg-af-purple hover:bg-af-purple/90 transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Start Free
+                    </a>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </nav>
 

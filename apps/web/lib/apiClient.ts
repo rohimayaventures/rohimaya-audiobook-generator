@@ -49,7 +49,7 @@ async function fetchApi<T>(
 
   if (!response.ok) {
     // Try to parse error response, handle empty bodies
-    let error = { message: 'Request failed' }
+    let error: { message?: string; detail?: string } = { message: 'Request failed' }
     try {
       const text = await response.text()
       if (text && text.trim()) {
@@ -228,7 +228,7 @@ export async function createJob(
 
     if (!response.ok) {
       // Try to parse error response, handle empty bodies
-      let error = { message: 'Upload failed' }
+      let error: { message?: string; detail?: string } = { message: 'Upload failed' }
       try {
         const text = await response.text()
         if (text && text.trim()) {
