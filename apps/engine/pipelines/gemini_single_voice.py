@@ -43,6 +43,7 @@ class GeminiSingleVoicePipeline:
         input_language_code: str = "en-US",
         output_language_code: Optional[str] = None,
         emotion_style_prompt: Optional[str] = None,
+        audio_format: str = "mp3",
         max_words_per_chunk: int = 500,
         max_chars_per_chunk: Optional[int] = None,
     ):
@@ -54,6 +55,7 @@ class GeminiSingleVoicePipeline:
             input_language_code: Language of the manuscript (or "auto" to detect)
             output_language_code: Desired output language (None to keep same as input)
             emotion_style_prompt: Custom style/emotion instructions
+            audio_format: Output audio format (mp3, wav, flac, m4b). Default: mp3
             max_words_per_chunk: Maximum words per chunk
             max_chars_per_chunk: Maximum characters per chunk (defaults to env var)
         """
@@ -61,6 +63,7 @@ class GeminiSingleVoicePipeline:
         self.input_language_code = input_language_code
         self.output_language_code = output_language_code or input_language_code
         self.emotion_style_prompt = emotion_style_prompt
+        self.audio_format = audio_format.lower()
         self.max_words = max_words_per_chunk
 
         # Get max chars from environment or use provided value
@@ -75,7 +78,20 @@ class GeminiSingleVoicePipeline:
         logger.info(f"  Voice preset: {voice_preset_id}")
         logger.info(f"  Input language: {input_language_code}")
         logger.info(f"  Output language: {self.output_language_code}")
+        logger.info(f"  Audio format: {self.audio_format}")
         logger.info(f"  Max chars per chunk: {self.max_chars}")
+
+    def _get_file_extension(self) -> str:
+        """Get the file extension for the audio format."""
+        ext_map = {
+            "mp3": ".mp3",
+            "wav": ".wav",
+            "flac": ".flac",
+            "m4b": ".m4b",
+            "m4a": ".m4a",
+            "mp4": ".m4a",
+        }
+        return ext_map.get(self.audio_format, ".mp3")
 
     async def generate_audio_chunk(
         self,
@@ -107,6 +123,7 @@ class GeminiSingleVoicePipeline:
                 input_language_code=self.input_language_code,
                 output_language_code=self.output_language_code,
                 emotion_style_prompt=self.emotion_style_prompt,
+                audio_format=self.audio_format,
             )
 
             # Write to file
@@ -155,10 +172,24 @@ class GeminiSingleVoicePipeline:
                     print(f"   ⚠️ Chunk not found: {chunk_path}")
                     continue
 
-                segment = AudioSegment.from_mp3(str(chunk_path))
+                # Load audio file based on format
+                segment = AudioSegment.from_file(str(chunk_path))
                 final_audio += segment
 
-            final_audio.export(str(final_path), format="mp3", bitrate="320k")
+            # Export to the correct format
+            fmt = self.audio_format
+            if fmt == "mp3":
+                final_audio.export(str(final_path), format="mp3", bitrate="320k")
+            elif fmt == "wav":
+                final_audio.export(str(final_path), format="wav")
+            elif fmt == "flac":
+                final_audio.export(str(final_path), format="flac")
+            elif fmt in ("m4b", "m4a", "mp4"):
+                final_audio.export(str(final_path), format="mp4", codec="aac", bitrate="320k")
+            else:
+                # Default to MP3
+                final_audio.export(str(final_path), format="mp3", bitrate="320k")
+
             print(f"   ✅ Merged: {final_path.name}")
             return True
 
@@ -201,9 +232,10 @@ class GeminiSingleVoicePipeline:
         # Generate audio for each chunk
         chunk_paths = []
         safe_title = sanitize_title_for_filename(title)
+        ext = self._get_file_extension()
 
         for i, chunk in enumerate(chunks, start=1):
-            chunk_filename = f"Chapter {idx:02d} - {safe_title} - part{i}.mp3"
+            chunk_filename = f"Chapter {idx:02d} - {safe_title} - part{i}{ext}"
             chunk_path = output_dir / chunk_filename
 
             if await self.generate_audio_chunk(chunk, chunk_path, f"Chapter {idx}, Part {i}"):
@@ -220,7 +252,7 @@ class GeminiSingleVoicePipeline:
             return None
 
         # Merge chunks into final chapter file
-        final_filename = f"Chapter {idx:02d} - {safe_title} (final).mp3"
+        final_filename = f"Chapter {idx:02d} - {safe_title} (final){ext}"
         final_path = output_dir / final_filename
 
         if self.merge_chunks_pydub(chunk_paths, final_path):
@@ -287,7 +319,8 @@ class GeminiSingleVoicePipeline:
 
         # Merge all chapters into final audiobook
         safe_title = sanitize_title_for_filename(book_title)
-        final_book_path = output_dir / f"{safe_title}_COMPLETE.mp3"
+        ext = self._get_file_extension()
+        final_book_path = output_dir / f"{safe_title}_COMPLETE{ext}"
 
         print(f"\n📚 Merging {len(chapter_paths)} chapters into final audiobook...")
         if progress_callback:
@@ -319,6 +352,7 @@ async def generate_gemini_audiobook(
     input_language_code: str = "en-US",
     output_language_code: Optional[str] = None,
     emotion_style_prompt: Optional[str] = None,
+    audio_format: str = "mp3",
     book_title: str = "Audiobook",
     progress_callback: Optional[Callable[[float, str], None]] = None,
 ) -> List[Path]:
@@ -332,6 +366,7 @@ async def generate_gemini_audiobook(
         input_language_code: Input language (or "auto" to detect)
         output_language_code: Output language (None to keep same as input)
         emotion_style_prompt: Custom style/emotion instructions
+        audio_format: Output audio format (mp3, wav, flac, m4b). Default: mp3
         book_title: Title for the final merged audiobook file
         progress_callback: Optional callback for progress updates
 
@@ -343,6 +378,7 @@ async def generate_gemini_audiobook(
         input_language_code=input_language_code,
         output_language_code=output_language_code,
         emotion_style_prompt=emotion_style_prompt,
+        audio_format=audio_format,
     )
 
     return await pipeline.generate_full_book(
@@ -361,6 +397,7 @@ def generate_gemini_audiobook_sync(
     input_language_code: str = "en-US",
     output_language_code: Optional[str] = None,
     emotion_style_prompt: Optional[str] = None,
+    audio_format: str = "mp3",
     book_title: str = "Audiobook",
 ) -> List[Path]:
     """
@@ -376,6 +413,7 @@ def generate_gemini_audiobook_sync(
             input_language_code=input_language_code,
             output_language_code=output_language_code,
             emotion_style_prompt=emotion_style_prompt,
+            audio_format=audio_format,
             book_title=book_title,
         )
     )

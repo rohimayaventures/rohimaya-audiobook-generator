@@ -455,12 +455,12 @@ class GeminiTTS:
 
     def _convert_to_mp3(self, raw_audio: bytes, output_format: str = "mp3") -> bytes:
         """
-        Convert raw PCM/WAV audio to the desired output format.
+        Convert raw audio to the desired output format.
 
-        Gemini TTS returns linear16 PCM audio (WAV-like format).
-        We convert to the requested format for browser compatibility.
+        Gemini TTS API returns audio data that may be in various formats.
+        We auto-detect the format and convert to the requested output format.
 
-        Supported formats: mp3, wav, flac, m4a/m4b
+        Supported output formats: mp3, wav, flac, m4a/m4b
 
         Args:
             raw_audio: Raw audio bytes from Gemini API
@@ -479,22 +479,61 @@ class GeminiTTS:
         try:
             from pydub import AudioSegment
 
-            # Load the raw audio data
-            # Gemini returns linear16 PCM at 24000 Hz (typical for speech)
             audio_stream = io.BytesIO(raw_audio)
+            audio = None
 
-            # Try to load as WAV first (Gemini usually returns proper WAV headers)
-            try:
-                audio = AudioSegment.from_wav(audio_stream)
-            except Exception:
-                # If WAV loading fails, try loading as raw PCM
+            # Log the first few bytes to help debug format issues
+            header = raw_audio[:20] if len(raw_audio) > 20 else raw_audio
+            logger.info(f"Audio header bytes: {header.hex()}")
+
+            # Try to auto-detect format using pydub's from_file with format hints
+            # The order matters - try most common formats first
+
+            # Check for WAV header (RIFF....WAVE)
+            if raw_audio[:4] == b'RIFF' and raw_audio[8:12] == b'WAVE':
+                logger.info("Detected WAV format")
                 audio_stream.seek(0)
-                audio = AudioSegment.from_raw(
-                    audio_stream,
-                    sample_width=2,  # 16-bit audio
-                    frame_rate=24000,  # Gemini TTS sample rate
-                    channels=1,  # Mono
-                )
+                audio = AudioSegment.from_wav(audio_stream)
+
+            # Check for MP3 header (ID3 or 0xFF 0xFB/0xFF 0xFA sync bytes)
+            elif raw_audio[:3] == b'ID3' or (raw_audio[0] == 0xFF and raw_audio[1] in (0xFB, 0xFA, 0xF3, 0xF2)):
+                logger.info("Detected MP3 format")
+                audio_stream.seek(0)
+                audio = AudioSegment.from_mp3(audio_stream)
+
+            # Check for OGG header (OggS)
+            elif raw_audio[:4] == b'OggS':
+                logger.info("Detected OGG format")
+                audio_stream.seek(0)
+                audio = AudioSegment.from_ogg(audio_stream)
+
+            # Check for FLAC header (fLaC)
+            elif raw_audio[:4] == b'fLaC':
+                logger.info("Detected FLAC format")
+                audio_stream.seek(0)
+                audio = AudioSegment.from_file(audio_stream, format="flac")
+
+            else:
+                # Try auto-detection via ffmpeg
+                logger.info("Unknown format, trying auto-detection...")
+                audio_stream.seek(0)
+                try:
+                    audio = AudioSegment.from_file(audio_stream)
+                    logger.info("Auto-detection succeeded")
+                except Exception as e1:
+                    logger.warning(f"Auto-detection failed: {e1}")
+                    # Last resort: try as raw PCM (linear16 at 24kHz mono)
+                    logger.info("Trying as raw PCM (linear16, 24kHz, mono)")
+                    audio_stream.seek(0)
+                    audio = AudioSegment.from_raw(
+                        audio_stream,
+                        sample_width=2,  # 16-bit
+                        frame_rate=24000,  # Gemini TTS typical rate
+                        channels=1,  # Mono
+                    )
+
+            if audio is None:
+                raise ValueError("Could not load audio data")
 
             # Export to requested format
             output_buffer = io.BytesIO()
@@ -509,11 +548,13 @@ class GeminiTTS:
                 audio.export(output_buffer, format="mp4", codec="aac", bitrate="192k")
             else:
                 # Default to MP3 for unknown formats
-                logger.warning(f"Unknown format '{output_format}', defaulting to MP3")
+                logger.warning(f"Unknown output format '{output_format}', defaulting to MP3")
                 audio.export(output_buffer, format="mp3", bitrate="192k")
 
             output_buffer.seek(0)
-            return output_buffer.read()
+            result = output_buffer.read()
+            logger.info(f"Converted {len(raw_audio)} bytes -> {len(result)} bytes ({output_format})")
+            return result
 
         except ImportError:
             logger.warning("pydub not available, returning raw audio (may not play in browsers)")

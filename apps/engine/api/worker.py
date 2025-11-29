@@ -205,6 +205,7 @@ async def process_job(job_id: str):
             output_language = job.get("output_language_code") or input_language
             voice_preset_id = job.get("voice_preset_id") or job.get("narrator_voice_id", "studio_neutral")
             emotion_style = job.get("emotion_style_prompt")
+            audio_format = job.get("audio_format", "mp3")
 
             # Use Gemini TTS if available (recommended for multilingual)
             if google_genai_key and tts_provider in ("google", "gemini"):
@@ -214,6 +215,7 @@ async def process_job(job_id: str):
                 logger.info(f"[JOB] {job_id} - Voice preset: {voice_preset_id}")
                 logger.info(f"[JOB] {job_id} - Input language: {input_language}")
                 logger.info(f"[JOB] {job_id} - Output language: {output_language}")
+                logger.info(f"[JOB] {job_id} - Audio format: {audio_format}")
                 if emotion_style:
                     logger.info(f"[JOB] {job_id} - Emotion/style: {emotion_style}")
 
@@ -235,6 +237,7 @@ async def process_job(job_id: str):
                     input_language_code=input_language,
                     output_language_code=output_language,
                     emotion_style_prompt=emotion_style,
+                    audio_format=audio_format,
                     book_title=job["title"],
                     progress_callback=progress_callback,
                 )
