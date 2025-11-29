@@ -90,35 +90,108 @@ def extract_text_from_file(file_content: bytes, source_path: str) -> str:
         logger.warning("[EXTRACT] Decoded text file with utf-8 (errors ignored)")
         return text
 
-    # DOCX files - extract from XML in ZIP
+    # DOCX files - extract from XML in ZIP with heading detection
     elif ext == ".docx":
         try:
             import zipfile
             import xml.etree.ElementTree as ET
 
-            logger.info("[EXTRACT] Extracting text from DOCX file")
+            logger.info("[EXTRACT] Extracting text from DOCX file with heading detection")
             text_parts = []
+            chapter_count = 0
+
+            # Word XML namespace
+            W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
             with zipfile.ZipFile(io.BytesIO(file_content)) as zf:
+                # First, try to read styles.xml to understand heading definitions
+                style_to_heading = {}
+                try:
+                    if "word/styles.xml" in zf.namelist():
+                        with zf.open("word/styles.xml") as styles_xml:
+                            styles_tree = ET.parse(styles_xml)
+                            styles_root = styles_tree.getroot()
+                            # Find heading styles
+                            for style in styles_root.iter(f"{W_NS}style"):
+                                style_id = style.get(f"{W_NS}styleId", "")
+                                style_name_elem = style.find(f"{W_NS}name")
+                                if style_name_elem is not None:
+                                    style_name = style_name_elem.get(f"{W_NS}val", "").lower()
+                                    # Check for heading styles
+                                    if "heading" in style_name or "title" in style_name:
+                                        style_to_heading[style_id] = style_name
+                                        logger.debug(f"[EXTRACT] Found heading style: {style_id} -> {style_name}")
+                except Exception as style_err:
+                    logger.debug(f"[EXTRACT] Could not parse styles.xml: {style_err}")
+
                 # Read document.xml
                 with zf.open("word/document.xml") as doc_xml:
                     tree = ET.parse(doc_xml)
                     root = tree.getroot()
 
-                    # Word namespace
-                    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-
                     # Iterate through paragraphs to preserve structure
-                    for para in root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"):
+                    for para in root.iter(f"{W_NS}p"):
                         para_texts = []
-                        for t in para.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"):
+                        is_heading = False
+                        heading_level = 0
+
+                        # Check paragraph properties for style
+                        pPr = para.find(f"{W_NS}pPr")
+                        if pPr is not None:
+                            # Check for direct heading style (pStyle)
+                            pStyle = pPr.find(f"{W_NS}pStyle")
+                            if pStyle is not None:
+                                style_val = pStyle.get(f"{W_NS}val", "")
+                                # Check against known heading patterns
+                                style_lower = style_val.lower()
+                                if style_val in style_to_heading:
+                                    is_heading = True
+                                    # Extract level from style name if present
+                                    for lvl in range(1, 10):
+                                        if str(lvl) in style_to_heading[style_val]:
+                                            heading_level = lvl
+                                            break
+                                elif "heading" in style_lower or "title" in style_lower:
+                                    is_heading = True
+                                    # Try to extract level number
+                                    import re
+                                    lvl_match = re.search(r'(\d+)', style_val)
+                                    if lvl_match:
+                                        heading_level = int(lvl_match.group(1))
+
+                            # Check for outline level (another way Word marks headings)
+                            outlineLvl = pPr.find(f"{W_NS}outlineLvl")
+                            if outlineLvl is not None:
+                                is_heading = True
+                                heading_level = int(outlineLvl.get(f"{W_NS}val", "0")) + 1
+
+                        # Extract text from paragraph
+                        for t in para.iter(f"{W_NS}t"):
                             if t.text:
                                 para_texts.append(t.text)
+
                         if para_texts:
-                            text_parts.append("".join(para_texts))
+                            para_text = "".join(para_texts)
+
+                            # If it's a heading, add chapter marker
+                            if is_heading and heading_level <= 2:
+                                # Check if text already contains "Chapter" or similar
+                                text_lower = para_text.lower().strip()
+                                has_chapter_marker = any(marker in text_lower for marker in [
+                                    "chapter", "part", "prologue", "epilogue",
+                                    "introduction", "preface", "afterword"
+                                ])
+
+                                if not has_chapter_marker:
+                                    # Add "CHAPTER X:" prefix to help parser
+                                    chapter_count += 1
+                                    para_text = f"CHAPTER {chapter_count}: {para_text}"
+                                    logger.debug(f"[EXTRACT] Detected heading as chapter: {para_text[:50]}...")
+
+                            text_parts.append(para_text)
 
             text = "\n\n".join(text_parts)
-            logger.info(f"[EXTRACT] Extracted {len(text)} chars from DOCX ({len(text_parts)} paragraphs)")
+            logger.info(f"[EXTRACT] Extracted {len(text)} chars from DOCX ({len(text_parts)} paragraphs, {chapter_count} headings converted to chapters)")
             return text
 
         except Exception as e:
