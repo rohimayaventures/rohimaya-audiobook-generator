@@ -605,17 +605,21 @@ async def synthesize_segment(
     audio_format: str = "mp3",
 ) -> bytes:
     """
-    Convenience function to synthesize a text segment.
+    Synthesize a text segment with proper multilingual support.
 
-    If output_language_code differs from input_language_code,
-    the text will be translated first.
+    IMPORTANT: This implements a 3-step pipeline for multilingual TTS:
+    1. Detect input language (if auto or unknown)
+    2. Translate text if input != output language (with emotion preservation)
+    3. Send TRANSLATED text to TTS with correct output language code
+
+    DO NOT send English text to a Marathi/Hindi/etc voice - this produces static!
 
     Args:
         text: Text to synthesize
         preset_id: Voice preset ID
         input_language_code: Language of the input text (None or "auto" to detect)
         output_language_code: Desired output language (None to use input language)
-        emotion_style_prompt: Style/emotion instructions
+        emotion_style_prompt: Style/emotion instructions (e.g., "soft, romantic, intimate")
         audio_format: Output audio format (mp3, wav, flac, m4b). Default: mp3
 
     Returns:
@@ -628,31 +632,66 @@ async def synthesize_segment(
 
     tts = get_tts()
 
-    # Handle translation if needed
+    # ========================================================================
+    # STEP 1: Detect input language
+    # ========================================================================
+    detected_input_language = input_language_code
+
+    if input_language_code == "auto" or not input_language_code:
+        logger.info("[TTS] Step 1: Detecting input language...")
+        detected_input_language = await detect_language(text)
+        logger.info(f"[TTS] Detected input language: {detected_input_language}")
+    else:
+        logger.info(f"[TTS] Input language specified: {input_language_code}")
+
+    # ========================================================================
+    # STEP 2: Translate if needed (input language != output language)
+    # ========================================================================
     final_text = text
-    final_language = output_language_code or input_language_code
+    final_language = output_language_code or detected_input_language or "en-US"
 
-    if output_language_code and input_language_code:
-        # Normalize language codes for comparison
-        input_base = input_language_code.split("-")[0].lower() if input_language_code != "auto" else None
-        output_base = output_language_code.split("-")[0].lower()
+    # Normalize language codes for comparison
+    input_base = detected_input_language.split("-")[0].lower() if detected_input_language else "en"
+    output_base = final_language.split("-")[0].lower() if final_language else "en"
 
-        if input_language_code == "auto":
-            # Detect language first
-            detected = await detect_language(text)
-            input_base = detected.split("-")[0].lower() if detected else None
+    needs_translation = input_base != output_base
 
-        # Translate if languages differ
-        if input_base and input_base != output_base:
-            logger.info(f"Translating from {input_language_code} to {output_language_code}")
-            final_text = await translate_text(
-                text=text,
-                source_lang=input_language_code,
-                target_lang=output_language_code,
-            )
-            final_language = output_language_code
+    if needs_translation and output_language_code:
+        logger.info(f"[TTS] Step 2: Translation required ({input_base} -> {output_base})")
+        logger.info(f"[TTS] Translating with emotion preservation: {emotion_style_prompt or 'natural'}")
 
-    # Synthesize
+        # Translate with emotion/style preservation
+        final_text = await translate_text(
+            text=text,
+            source_lang=detected_input_language or "en-US",
+            target_lang=output_language_code,
+            preserve_formatting=True,
+            emotion_style=emotion_style_prompt,
+        )
+
+        # Log translation preview
+        preview = final_text[:300] + "..." if len(final_text) > 300 else final_text
+        logger.info(f"[TTS] Translation preview: {preview}")
+
+        # The TTS language code MUST be the output language
+        final_language = output_language_code
+    else:
+        logger.info(f"[TTS] Step 2: No translation needed (same language: {input_base})")
+
+    # ========================================================================
+    # STEP 3: Synthesize with TTS
+    # ========================================================================
+    logger.info(f"[TTS] Step 3: Synthesizing audio")
+    logger.info(f"[TTS]   - Preset: {preset_id}")
+    logger.info(f"[TTS]   - Language code: {final_language}")
+    logger.info(f"[TTS]   - Style: {emotion_style_prompt or 'default'}")
+    logger.info(f"[TTS]   - Text length: {len(final_text)} chars")
+
+    # Log final text preview (what will be sent to TTS)
+    final_preview = final_text[:200] + "..." if len(final_text) > 200 else final_text
+    logger.info(f"[TTS]   - Final TTS text preview: {final_preview}")
+
+    # Synthesize - the text should now be in the OUTPUT language
     return await tts.synthesize(
         text=final_text,
         preset_id=preset_id,

@@ -147,10 +147,14 @@ Text:
 Language code:"""
 
     try:
+        logger.info("[DETECT] Detecting language from text sample...")
+        sample_preview = sample[:100] + "..." if len(sample) > 100 else sample
+        logger.info(f"[DETECT] Sample: {sample_preview}")
+
         response = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
             )
         )
@@ -160,15 +164,15 @@ Language code:"""
             lang_code = response.text.strip().split()[0].strip()
             # Validate it looks like a language code
             if "-" in lang_code and len(lang_code) <= 10:
-                logger.info(f"Detected language: {lang_code}")
+                logger.info(f"[DETECT] Detected language: {lang_code}")
                 return lang_code
 
         # Default fallback
-        logger.warning("Could not detect language, defaulting to en-US")
+        logger.warning("[DETECT] Could not detect language, defaulting to en-US")
         return "en-US"
 
     except Exception as e:
-        logger.error(f"Language detection failed: {e}")
+        logger.error(f"[DETECT] Language detection failed: {e}")
         raise TranslationError(f"Failed to detect language: {str(e)}") from e
 
 
@@ -177,6 +181,7 @@ async def translate_text(
     source_lang: str,
     target_lang: str,
     preserve_formatting: bool = True,
+    emotion_style: Optional[str] = None,
 ) -> str:
     """
     Translate text from source language to target language using Gemini.
@@ -186,6 +191,7 @@ async def translate_text(
         source_lang: Source language code (or "auto" to detect)
         target_lang: Target language code
         preserve_formatting: If True, preserves paragraph breaks and structure
+        emotion_style: Optional emotion/style to preserve (e.g., "romantic, intimate, soft")
 
     Returns:
         Translated text
@@ -198,21 +204,30 @@ async def translate_text(
     # Handle auto-detect
     if source_lang == "auto":
         source_lang = await detect_language(text)
+        logger.info(f"[TRANSLATE] Auto-detected source language: {source_lang}")
 
     source_name = _get_language_name(source_lang)
     target_name = _get_language_name(target_lang)
 
-    # Build translation prompt
+    # Build translation prompt with emotional preservation
     formatting_instruction = ""
     if preserve_formatting:
         formatting_instruction = """
 IMPORTANT: Preserve all paragraph breaks, line breaks, and text structure.
 Do not add any explanations or notes. Only output the translated text."""
 
+    # Add emotion/style preservation instructions
+    emotion_instruction = ""
+    if emotion_style:
+        emotion_instruction = f"""
+CRITICAL: Preserve the emotional tone and style throughout the translation.
+The translation should feel: {emotion_style}
+Keep romantic nuances intact, use natural phrasing, and maintain soft intimate style where present."""
+
     prompt = f"""Translate the following text from {source_name} to {target_name}.
 
 Produce a natural, fluent translation suitable for audiobook narration.
-Maintain the original tone, style, and meaning.{formatting_instruction}
+Maintain the original tone, style, and meaning.{emotion_instruction}{formatting_instruction}
 
 Original text ({source_name}):
 {text}
@@ -220,17 +235,24 @@ Original text ({source_name}):
 Translation ({target_name}):"""
 
     try:
+        logger.info(f"[TRANSLATE] Translating from {source_name} to {target_name}")
+        if emotion_style:
+            logger.info(f"[TRANSLATE] Preserving emotion/style: {emotion_style}")
+
         response = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
             )
         )
 
         if response.text:
             translated = response.text.strip()
-            logger.info(f"Translated {len(text)} chars from {source_lang} to {target_lang}")
+            # Log preview of translation
+            preview = translated[:200] + "..." if len(translated) > 200 else translated
+            logger.info(f"[TRANSLATE] Translation complete: {len(text)} -> {len(translated)} chars")
+            logger.info(f"[TRANSLATE] Preview: {preview}")
             return translated
 
         raise TranslationError("No translation in response")
