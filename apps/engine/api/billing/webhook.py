@@ -33,7 +33,7 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, status, Request, Header
 import stripe
 
-from ..database import db
+from api.database import db
 from .stripe_client import verify_webhook_signature
 
 # Structured logging for billing events

@@ -1678,7 +1678,7 @@ async def run_self_test(
             if not api_key:
                 raise ValueError("OPENAI_API_KEY not configured")
 
-            from ..pipelines.standard_single_voice import generate_single_voice_audiobook
+            from pipelines.standard_single_voice import generate_single_voice_audiobook
 
             audio_files = generate_single_voice_audiobook(
                 manuscript_text=test_manuscript,
@@ -1699,9 +1699,9 @@ async def run_self_test(
         else:
             # Stub mode - just verify imports and structure work
             try:
-                from ..pipelines.standard_single_voice import SingleVoicePipeline
-                from ..core.chapter_parser import split_into_chapters
-                from ..core.advanced_chunker import chunk_chapter_advanced
+                from pipelines.standard_single_voice import SingleVoicePipeline
+                from core.chapter_parser import split_into_chapters
+                from core.advanced_chunker import chunk_chapter_advanced
 
                 result.details["imports"] = "ok"
 

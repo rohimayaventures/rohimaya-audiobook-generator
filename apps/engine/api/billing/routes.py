@@ -18,8 +18,8 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from pydantic import BaseModel, Field
 
-from ..auth import get_current_user
-from ..database import db
+from api.auth import get_current_user
+from api.database import db
 from .entitlements import (
     get_plan_entitlements,
     get_all_plans_display_info,

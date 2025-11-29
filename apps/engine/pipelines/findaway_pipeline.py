@@ -36,10 +36,10 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Import agents and helpers
-from ..agents.manuscript_parser_agent import parse_manuscript_structure
-from ..agents.retail_sample_agent import select_retail_sample_excerpt
-from ..core.findaway_planner import build_findaway_section_plan, get_sections_for_tts
-from ..core.cover_generator import generate_cover_image, save_cover_to_file, get_cover_filename
+from agents.manuscript_parser_agent import parse_manuscript_structure
+from agents.retail_sample_agent import select_retail_sample_excerpt
+from core.findaway_planner import build_findaway_section_plan, get_sections_for_tts
+from core.cover_generator import generate_cover_image, save_cover_to_file, get_cover_filename
 
 
 def generate_findaway_audiobook(
