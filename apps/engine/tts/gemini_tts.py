@@ -4,7 +4,7 @@ Supports multilingual audio generation with voice presets and emotion control
 
 Environment variables:
 - GOOGLE_GENAI_API_KEY: Google AI Studio API key (required)
-- GOOGLE_TTS_MODEL: TTS model (default: gemini-2.5-flash-tts)
+- GOOGLE_TTS_MODEL: TTS model (default: gemini-2.5-flash-preview-tts)
 - GOOGLE_TTS_AUDIO_ENCODING: Audio format (default: mp3)
 - GOOGLE_TTS_MAX_CHARS_PER_SEGMENT: Max chars per request (default: 2800)
 """
@@ -301,7 +301,7 @@ def get_config() -> Dict[str, Any]:
     """Get TTS configuration from environment"""
     return {
         "api_key": os.getenv("GOOGLE_GENAI_API_KEY"),
-        "model": os.getenv("GOOGLE_TTS_MODEL", "gemini-2.5-flash-tts"),
+        "model": os.getenv("GOOGLE_TTS_MODEL", "gemini-2.5-flash-preview-tts"),
         "audio_encoding": os.getenv("GOOGLE_TTS_AUDIO_ENCODING", "mp3"),
         "max_chars_per_segment": int(os.getenv("GOOGLE_TTS_MAX_CHARS_PER_SEGMENT", "2800")),
     }

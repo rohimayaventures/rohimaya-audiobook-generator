@@ -279,12 +279,12 @@ async def create_job(
             detail="Mode must be 'single_voice', 'dual_voice', or 'findaway'"
         )
 
-    # Validate TTS provider - only OpenAI is currently implemented
-    if request.tts_provider not in ["openai"]:
+    # Validate TTS provider
+    if request.tts_provider not in ["openai", "google", "gemini"]:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail=f"TTS provider '{request.tts_provider}' is not yet implemented. "
-                   f"Currently supported: 'openai'. ElevenLabs and Inworld coming soon."
+                   f"Currently supported: 'openai', 'google', 'gemini'. ElevenLabs and Inworld coming soon."
         )
 
     # Validate dual-voice requirements
@@ -439,10 +439,10 @@ async def create_job_with_upload(
         )
 
     # Validate TTS provider
-    if tts_provider not in ["openai"]:
+    if tts_provider not in ["openai", "google", "gemini"]:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=f"TTS provider '{tts_provider}' is not yet implemented. Currently supported: 'openai'."
+            detail=f"TTS provider '{tts_provider}' is not yet implemented. Currently supported: 'openai', 'google', 'gemini'."
         )
 
     # Validate file type
