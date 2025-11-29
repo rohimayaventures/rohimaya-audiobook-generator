@@ -860,7 +860,7 @@ function DashboardContent() {
               disabled={creating}
               className="w-full mt-6"
             >
-              Start conversion
+              Generate Now
             </PrimaryButton>
           </GlassCard>
 

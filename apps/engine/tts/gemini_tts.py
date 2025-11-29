@@ -370,6 +370,7 @@ class GeminiTTS:
         preset_id: str = "studio_neutral",
         language_code: Optional[str] = None,
         emotion_style_prompt: Optional[str] = None,
+        audio_format: str = "mp3",
     ) -> bytes:
         """
         Synthesize speech from text using Gemini TTS.
@@ -379,9 +380,10 @@ class GeminiTTS:
             preset_id: Voice preset ID
             language_code: Override language code (optional)
             emotion_style_prompt: Style/emotion instructions (e.g., "soft, romantic, intimate")
+            audio_format: Output audio format (mp3, wav, flac, m4b). Default: mp3
 
         Returns:
-            Audio bytes in configured format (MP3 by default)
+            Audio bytes in requested format (MP3 by default)
 
         Raises:
             TTSSynthesisError: If synthesis fails
@@ -432,12 +434,17 @@ class GeminiTTS:
             )
 
             # Extract audio data from response
+            # Gemini returns linear16 PCM audio (WAV format) by default
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
                     if hasattr(part, 'inline_data') and part.inline_data:
-                        audio_data = part.inline_data.data
-                        logger.info(f"Generated {len(audio_data)} bytes of audio")
-                        return audio_data
+                        raw_audio_data = part.inline_data.data
+                        logger.info(f"Generated {len(raw_audio_data)} bytes of raw audio")
+
+                        # Convert to requested format (default: MP3 for browser compatibility)
+                        converted_audio = self._convert_to_mp3(raw_audio_data, audio_format)
+                        logger.info(f"Converted to {audio_format.upper()}: {len(converted_audio)} bytes")
+                        return converted_audio
 
             raise TTSSynthesisError("No audio data in response")
 
@@ -445,6 +452,75 @@ class GeminiTTS:
             error_msg = f"TTS synthesis failed: {str(e)}"
             logger.error(error_msg)
             raise TTSSynthesisError(error_msg) from e
+
+    def _convert_to_mp3(self, raw_audio: bytes, output_format: str = "mp3") -> bytes:
+        """
+        Convert raw PCM/WAV audio to the desired output format.
+
+        Gemini TTS returns linear16 PCM audio (WAV-like format).
+        We convert to the requested format for browser compatibility.
+
+        Supported formats: mp3, wav, flac, m4a/m4b
+
+        Args:
+            raw_audio: Raw audio bytes from Gemini API
+            output_format: Target format (default: mp3)
+
+        Returns:
+            Audio bytes in requested format
+        """
+        import io
+
+        # Normalize format name
+        output_format = output_format.lower()
+        if output_format == "m4b":
+            output_format = "mp4"  # m4b is just mp4 container with audiobook flag
+
+        try:
+            from pydub import AudioSegment
+
+            # Load the raw audio data
+            # Gemini returns linear16 PCM at 24000 Hz (typical for speech)
+            audio_stream = io.BytesIO(raw_audio)
+
+            # Try to load as WAV first (Gemini usually returns proper WAV headers)
+            try:
+                audio = AudioSegment.from_wav(audio_stream)
+            except Exception:
+                # If WAV loading fails, try loading as raw PCM
+                audio_stream.seek(0)
+                audio = AudioSegment.from_raw(
+                    audio_stream,
+                    sample_width=2,  # 16-bit audio
+                    frame_rate=24000,  # Gemini TTS sample rate
+                    channels=1,  # Mono
+                )
+
+            # Export to requested format
+            output_buffer = io.BytesIO()
+
+            if output_format == "mp3":
+                audio.export(output_buffer, format="mp3", bitrate="192k")
+            elif output_format == "wav":
+                audio.export(output_buffer, format="wav")
+            elif output_format == "flac":
+                audio.export(output_buffer, format="flac")
+            elif output_format in ("m4a", "mp4", "m4b"):
+                audio.export(output_buffer, format="mp4", codec="aac", bitrate="192k")
+            else:
+                # Default to MP3 for unknown formats
+                logger.warning(f"Unknown format '{output_format}', defaulting to MP3")
+                audio.export(output_buffer, format="mp3", bitrate="192k")
+
+            output_buffer.seek(0)
+            return output_buffer.read()
+
+        except ImportError:
+            logger.warning("pydub not available, returning raw audio (may not play in browsers)")
+            return raw_audio
+        except Exception as e:
+            logger.error(f"Audio conversion to {output_format} failed: {e}, returning raw audio")
+            return raw_audio
 
     def _build_speech_prompt(
         self,
@@ -485,6 +561,7 @@ async def synthesize_segment(
     input_language_code: Optional[str] = None,
     output_language_code: Optional[str] = None,
     emotion_style_prompt: Optional[str] = None,
+    audio_format: str = "mp3",
 ) -> bytes:
     """
     Convenience function to synthesize a text segment.
@@ -498,6 +575,7 @@ async def synthesize_segment(
         input_language_code: Language of the input text (None or "auto" to detect)
         output_language_code: Desired output language (None to use input language)
         emotion_style_prompt: Style/emotion instructions
+        audio_format: Output audio format (mp3, wav, flac, m4b). Default: mp3
 
     Returns:
         Audio bytes
@@ -539,6 +617,7 @@ async def synthesize_segment(
         preset_id=preset_id,
         language_code=final_language,
         emotion_style_prompt=emotion_style_prompt,
+        audio_format=audio_format,
     )
 
 
