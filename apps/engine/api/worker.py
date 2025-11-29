@@ -134,6 +134,11 @@ async def process_job(job_id: str):
             logger.error(f"[JOB] {job_id} - Not found in database")
             return
 
+        # Check if job was cancelled before we started
+        if job["status"] == "cancelled":
+            logger.info(f"[JOB] {job_id} - Already cancelled, skipping")
+            return
+
         logger.info(f"[JOB] {job_id} - Starting: {job['title']}")
         logger.info(f"[JOB] {job_id} - Mode: {job['mode']}, Provider: {job['tts_provider']}, Voice: {job.get('narrator_voice_id')}")
 

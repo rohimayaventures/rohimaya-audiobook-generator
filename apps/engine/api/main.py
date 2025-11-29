@@ -723,6 +723,60 @@ async def retry_job(
     return JobResponse(**updated_job)
 
 
+@app.post(
+    "/jobs/{job_id}/cancel",
+    response_model=JobResponse,
+    summary="Cancel Job",
+    tags=["Jobs"],
+)
+async def cancel_job(
+    job_id: str,
+    user_id: str = Depends(get_current_user)
+) -> JobResponse:
+    """
+    Cancel a pending or processing job.
+
+    Sets the job status to 'cancelled'. The background worker will stop
+    processing the job when it checks the status.
+
+    Requires authentication. User can only cancel their own jobs.
+    """
+    job = db.get_job(job_id)
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    # Verify ownership
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to cancel this job"
+        )
+
+    # Only allow cancelling pending or processing jobs
+    if job["status"] not in ["pending", "processing"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Can only cancel pending or processing jobs (current status: {job['status']})"
+        )
+
+    # Update job status to cancelled
+    updates = {
+        "status": "cancelled",
+        "error_message": "Job cancelled by user",
+        "completed_at": datetime.utcnow().isoformat(),
+    }
+
+    updated_job = db.update_job(job_id, updates)
+
+    logger.info(f"[JOB] {job_id} - Cancelled by user")
+
+    return JobResponse(**updated_job)
+
+
 class CloneJobRequest(BaseModel):
     """Request to clone a job with optional modifications"""
     title: Optional[str] = Field(None, description="New title (or keep original)")
