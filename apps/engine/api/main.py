@@ -116,6 +116,12 @@ class JobCreateRequest(BaseModel):
     audio_format: str = Field(default="mp3", description="mp3, wav, flac, or m4b")
     audio_bitrate: str = Field(default="128k", description="128k, 192k, or 320k")
 
+    # Multilingual TTS options (Gemini TTS)
+    input_language_code: Optional[str] = Field(default="en-US", description="Input language code for TTS (e.g., en-US, hi-IN)")
+    output_language_code: Optional[str] = Field(None, description="Output language code - if different from input, text will be translated")
+    voice_preset_id: Optional[str] = Field(None, description="Gemini voice preset ID (e.g., studio_neutral, romantic_female)")
+    emotion_style_prompt: Optional[str] = Field(None, description="Emotion/style prompt for TTS (e.g., 'soft, romantic, intimate')")
+
     # Findaway package options
     narrator_name: Optional[str] = Field(None, description="Narrator name for credits (findaway)")
     genre: Optional[str] = Field(None, description="Book genre (findaway)")
@@ -172,6 +178,12 @@ class JobResponse(BaseModel):
     created_at: str
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+
+    # Multilingual TTS fields (Gemini TTS)
+    input_language_code: Optional[str] = None
+    output_language_code: Optional[str] = None
+    voice_preset_id: Optional[str] = None
+    emotion_style_prompt: Optional[str] = None
 
     # Findaway-specific fields
     narrator_name: Optional[str] = None
@@ -375,6 +387,11 @@ async def create_job(
         "audio_format": request.audio_format,
         "audio_bitrate": request.audio_bitrate,
         "progress_percent": 0.0,
+        # Multilingual TTS options (Gemini TTS)
+        "input_language_code": request.input_language_code,
+        "output_language_code": request.output_language_code,
+        "voice_preset_id": request.voice_preset_id,
+        "emotion_style_prompt": request.emotion_style_prompt,
         # Findaway-specific fields
         "narrator_name": request.narrator_name,
         "genre": request.genre,
@@ -421,6 +438,11 @@ async def create_job_with_upload(
     narrator_voice_id: str = Form(default="alloy", description="Narrator voice ID"),
     audio_format: str = Form(default="mp3", description="Output audio format"),
     audio_bitrate: str = Form(default="128k", description="Audio bitrate"),
+    # Multilingual TTS options (Gemini TTS)
+    input_language_code: str = Form(default="en-US", description="Input language code"),
+    output_language_code: Optional[str] = Form(default=None, description="Output language code for translation"),
+    voice_preset_id: Optional[str] = Form(default=None, description="Gemini voice preset ID"),
+    emotion_style_prompt: Optional[str] = Form(default=None, description="Emotion/style prompt for TTS"),
     user_id: str = Depends(get_current_user)
 ) -> JobResponse:
     """
@@ -526,6 +548,11 @@ async def create_job_with_upload(
         "audio_format": audio_format,
         "audio_bitrate": audio_bitrate,
         "progress_percent": 0.0,
+        # Multilingual TTS options (Gemini TTS)
+        "input_language_code": input_language_code,
+        "output_language_code": output_language_code,
+        "voice_preset_id": voice_preset_id,
+        "emotion_style_prompt": emotion_style_prompt,
     }
 
     job = db.create_job(job_data)
