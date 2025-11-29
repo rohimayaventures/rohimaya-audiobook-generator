@@ -40,7 +40,9 @@ class VoicePreset:
 # Reference: https://ai.google.dev/gemini-api/docs/speech-generation
 # Available voices: Aoede, Charon, Fenrir, Kore, Puck, Zephyr, etc.
 VOICE_PRESETS: Dict[str, VoicePreset] = {
-    # English - US
+    # =========================================================================
+    # ENGLISH - US (Main collection with variety)
+    # =========================================================================
     "narrator_female_warm": VoicePreset(
         id="narrator_female_warm",
         label="Warm Female Narrator",
@@ -49,6 +51,42 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="female",
         style="warm, engaging",
+    ),
+    "narrator_female_soft": VoicePreset(
+        id="narrator_female_soft",
+        label="Soft Female Narrator",
+        description="Soft, gentle voice - ideal for romance and intimate stories",
+        voice_name="Achernar",
+        default_language_code="en-US",
+        gender="female",
+        style="soft, gentle",
+    ),
+    "narrator_female_smooth": VoicePreset(
+        id="narrator_female_smooth",
+        label="Smooth Female Narrator",
+        description="Smooth, flowing voice - great for literary fiction",
+        voice_name="Despina",
+        default_language_code="en-US",
+        gender="female",
+        style="smooth, flowing",
+    ),
+    "narrator_female_youthful": VoicePreset(
+        id="narrator_female_youthful",
+        label="Youthful Female Narrator",
+        description="Youthful, fresh voice - perfect for YA and coming-of-age stories",
+        voice_name="Leda",
+        default_language_code="en-US",
+        gender="female",
+        style="youthful, fresh",
+    ),
+    "narrator_female_clear": VoicePreset(
+        id="narrator_female_clear",
+        label="Clear Female Narrator",
+        description="Clear, articulate voice - ideal for non-fiction and educational content",
+        voice_name="Erinome",
+        default_language_code="en-US",
+        gender="female",
+        style="clear, articulate",
     ),
     "narrator_male_calm": VoicePreset(
         id="narrator_male_calm",
@@ -59,6 +97,51 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         gender="male",
         style="calm, professional",
     ),
+    "narrator_male_smooth": VoicePreset(
+        id="narrator_male_smooth",
+        label="Smooth Male Narrator",
+        description="Smooth, rich voice - perfect for thrillers and mysteries",
+        voice_name="Algieba",
+        default_language_code="en-US",
+        gender="male",
+        style="smooth, rich",
+    ),
+    "narrator_male_warm": VoicePreset(
+        id="narrator_male_warm",
+        label="Warm Male Narrator",
+        description="Warm, friendly voice - great for memoirs and personal stories",
+        voice_name="Sulafat",
+        default_language_code="en-US",
+        gender="male",
+        style="warm, inviting",
+    ),
+    "narrator_male_gravelly": VoicePreset(
+        id="narrator_male_gravelly",
+        label="Gravelly Male Narrator",
+        description="Deep, textured voice - ideal for noir and hard-boiled fiction",
+        voice_name="Algenib",
+        default_language_code="en-US",
+        gender="male",
+        style="gravelly, deep",
+    ),
+    "narrator_male_mature": VoicePreset(
+        id="narrator_male_mature",
+        label="Mature Male Narrator",
+        description="Mature, seasoned voice - perfect for historical fiction and classics",
+        voice_name="Gacrux",
+        default_language_code="en-US",
+        gender="male",
+        style="mature, seasoned",
+    ),
+    "narrator_male_knowledgeable": VoicePreset(
+        id="narrator_male_knowledgeable",
+        label="Knowledgeable Male Narrator",
+        description="Knowledgeable, authoritative voice - ideal for science and history",
+        voice_name="Sadaltager",
+        default_language_code="en-US",
+        gender="male",
+        style="knowledgeable, authoritative",
+    ),
     "storyteller_expressive": VoicePreset(
         id="storyteller_expressive",
         label="Expressive Storyteller",
@@ -67,6 +150,24 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="expressive, dynamic",
+    ),
+    "storyteller_lively": VoicePreset(
+        id="storyteller_lively",
+        label="Lively Storyteller",
+        description="Lively, energetic voice for children's books and animated stories",
+        voice_name="Sadachbia",
+        default_language_code="en-US",
+        gender="neutral",
+        style="lively, energetic",
+    ),
+    "storyteller_friendly": VoicePreset(
+        id="storyteller_friendly",
+        label="Friendly Storyteller",
+        description="Friendly, approachable voice for casual and conversational content",
+        voice_name="Achird",
+        default_language_code="en-US",
+        gender="neutral",
+        style="friendly, approachable",
     ),
     "studio_neutral": VoicePreset(
         id="studio_neutral",
@@ -77,8 +178,46 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         gender="neutral",
         style="neutral, clear",
     ),
+    "studio_bright": VoicePreset(
+        id="studio_bright",
+        label="Bright Studio Narrator",
+        description="Bright, clear voice for business and self-help books",
+        voice_name="Autonoe",
+        default_language_code="en-US",
+        gender="neutral",
+        style="bright, clear",
+    ),
+    "studio_even": VoicePreset(
+        id="studio_even",
+        label="Even Studio Narrator",
+        description="Even, balanced voice for technical and instructional content",
+        voice_name="Schedar",
+        default_language_code="en-US",
+        gender="neutral",
+        style="even, balanced",
+    ),
+    "casual_narrator": VoicePreset(
+        id="casual_narrator",
+        label="Casual Narrator",
+        description="Relaxed, casual voice for informal and conversational audiobooks",
+        voice_name="Zubenelgenubi",
+        default_language_code="en-US",
+        gender="neutral",
+        style="casual, relaxed",
+    ),
+    "gentle_narrator": VoicePreset(
+        id="gentle_narrator",
+        label="Gentle Narrator",
+        description="Gentle, soothing voice for meditation and wellness content",
+        voice_name="Vindemiatrix",
+        default_language_code="en-US",
+        gender="neutral",
+        style="gentle, soothing",
+    ),
 
-    # English - UK
+    # =========================================================================
+    # ENGLISH - UK (British accents)
+    # =========================================================================
     "narrator_british_female": VoicePreset(
         id="narrator_british_female",
         label="British Female Narrator",
@@ -96,6 +235,15 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-GB",
         gender="male",
         style="distinguished, classic",
+    ),
+    "narrator_british_clear": VoicePreset(
+        id="narrator_british_clear",
+        label="Clear British Narrator",
+        description="Clear, precise British voice for documentaries and non-fiction",
+        voice_name="Iapetus",
+        default_language_code="en-GB",
+        gender="neutral",
+        style="clear, precise",
     ),
 
     # Spanish
@@ -514,23 +662,29 @@ class GeminiTTS:
                 audio = AudioSegment.from_file(audio_stream, format="flac")
 
             else:
-                # Try auto-detection via ffmpeg
-                logger.info("Unknown format, trying auto-detection...")
+                # Gemini TTS typically returns raw PCM (linear16 at 24kHz mono)
+                # Try raw PCM FIRST before auto-detection, since Gemini rarely returns
+                # any format with headers
+                logger.info("No recognized format header, trying as raw PCM first (Gemini default)")
                 audio_stream.seek(0)
                 try:
-                    audio = AudioSegment.from_file(audio_stream)
-                    logger.info("Auto-detection succeeded")
-                except Exception as e1:
-                    logger.warning(f"Auto-detection failed: {e1}")
-                    # Last resort: try as raw PCM (linear16 at 24kHz mono)
-                    logger.info("Trying as raw PCM (linear16, 24kHz, mono)")
-                    audio_stream.seek(0)
                     audio = AudioSegment.from_raw(
                         audio_stream,
-                        sample_width=2,  # 16-bit
-                        frame_rate=24000,  # Gemini TTS typical rate
+                        sample_width=2,  # 16-bit (linear16)
+                        frame_rate=24000,  # Gemini TTS outputs at 24kHz
                         channels=1,  # Mono
                     )
+                    logger.info(f"Loaded as raw PCM: duration={len(audio)}ms")
+                except Exception as e1:
+                    logger.warning(f"Raw PCM failed: {e1}, trying auto-detection...")
+                    # Fallback to auto-detection via ffmpeg
+                    audio_stream.seek(0)
+                    try:
+                        audio = AudioSegment.from_file(audio_stream)
+                        logger.info("Auto-detection succeeded")
+                    except Exception as e2:
+                        logger.error(f"All format detection failed: raw PCM={e1}, auto={e2}")
+                        raise ValueError(f"Could not load audio: {e2}")
 
             if audio is None:
                 raise ValueError("Could not load audio data")
