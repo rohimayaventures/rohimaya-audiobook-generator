@@ -756,11 +756,11 @@ async def cancel_job(
             detail="You do not have permission to cancel this job"
         )
 
-    # Only allow cancelling pending or processing jobs
-    if job["status"] not in ["pending", "processing"]:
+    # Only allow cancelling jobs that aren't already completed or cancelled
+    if job["status"] in ["completed", "cancelled"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Can only cancel pending or processing jobs (current status: {job['status']})"
+            detail=f"Cannot cancel a job that is already {job['status']}"
         )
 
     # Update job status to cancelled
