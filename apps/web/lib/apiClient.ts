@@ -125,13 +125,19 @@ export interface CreateJobPayload {
   manuscript_text?: string
   // Modes: single_voice, dual_voice, findaway, multi_character
   mode: 'single_voice' | 'dual_voice' | 'findaway' | 'multi_character'
-  // TTS provider (openai is primary)
-  tts_provider: 'openai'
+  // TTS provider: 'google' (Gemini) or 'openai'
+  tts_provider: 'google' | 'openai'
+  // Voice selection - either narrator_voice_id (legacy) or voice_preset_id (new)
   narrator_voice_id: string
+  voice_preset_id?: string
   character_voice_id?: string
   character_name?: string
   audio_format?: string
   audio_bitrate?: string
+  // Multilingual TTS settings
+  input_language_code?: string  // e.g., "en-US", "es-ES", "auto"
+  output_language_code?: string // e.g., "en-US", "mr-IN" (for translation)
+  emotion_style_prompt?: string // e.g., "soft, romantic, intimate"
   // Findaway-specific options
   narrator_name?: string
   genre?: string
@@ -439,4 +445,65 @@ export interface CoverArtResponse {
  */
 export async function getJobCoverUrl(jobId: string): Promise<CoverArtResponse> {
   return fetchApi<CoverArtResponse>(`/jobs/${jobId}/cover`)
+}
+
+// ============================================
+// TTS Voice Library
+// ============================================
+
+export interface VoicePreset {
+  id: string
+  label: string
+  description: string
+  voice_name: string
+  default_language_code: string
+  gender: string
+  style: string
+}
+
+export interface LanguageInfo {
+  code: string
+  name: string
+}
+
+export interface VoiceLibraryResponse {
+  voice_presets: VoicePreset[]
+  input_languages: LanguageInfo[]
+  output_languages: LanguageInfo[]
+}
+
+export interface TTSPreviewRequest {
+  text?: string
+  preset_id: string
+  input_language_code: string
+  output_language_code?: string
+  emotion_style_prompt?: string
+}
+
+export interface TTSPreviewResponse {
+  success: boolean
+  audio_url?: string
+  audio_base64?: string
+  preset_id: string
+  input_language: string
+  output_language: string
+  duration_estimate_seconds?: number
+  error?: string
+}
+
+/**
+ * Get available voice presets and languages
+ */
+export async function getVoiceLibrary(): Promise<VoiceLibraryResponse> {
+  return fetchApi<VoiceLibraryResponse>('/tts/voices')
+}
+
+/**
+ * Generate a TTS voice preview
+ */
+export async function previewTTSVoice(request: TTSPreviewRequest): Promise<TTSPreviewResponse> {
+  return fetchApi<TTSPreviewResponse>('/tts/preview', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
 }

@@ -5,11 +5,14 @@ Production HTTP API for audiobook generation
 
 import os
 import asyncio
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File, Form
+
+logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
@@ -1011,12 +1014,170 @@ app.include_router(billing_webhook_router)
 
 
 # ============================================================================
+# TTS VOICE LIBRARY & PREVIEW ENDPOINTS
+# ============================================================================
+
+class VoicePresetResponse(BaseModel):
+    """Voice preset information"""
+    id: str
+    label: str
+    description: str
+    voice_name: str
+    default_language_code: str
+    gender: str
+    style: str
+
+
+class LanguageInfo(BaseModel):
+    """Language information"""
+    code: str
+    name: str
+
+
+class VoiceLibraryResponse(BaseModel):
+    """Voice library with presets and supported languages"""
+    voice_presets: List[VoicePresetResponse]
+    input_languages: List[LanguageInfo]
+    output_languages: List[LanguageInfo]
+
+
+class TTSPreviewRequest(BaseModel):
+    """Request to preview TTS voice"""
+    text: str = "My heart found its home in your hands. Every whisper between us tells a story of forever."
+    preset_id: str = "studio_neutral"
+    input_language_code: str = "en-US"
+    output_language_code: Optional[str] = None
+    emotion_style_prompt: Optional[str] = None
+
+
+class TTSPreviewResponse(BaseModel):
+    """TTS preview response"""
+    success: bool
+    audio_url: Optional[str] = None
+    audio_base64: Optional[str] = None
+    preset_id: str
+    input_language: str
+    output_language: str
+    duration_estimate_seconds: Optional[float] = None
+    error: Optional[str] = None
+
+
+@app.get(
+    "/tts/voices",
+    response_model=VoiceLibraryResponse,
+    summary="Get Voice Library",
+    description="Get all available voice presets and supported languages for TTS",
+    tags=["TTS"],
+)
+async def get_voice_library() -> VoiceLibraryResponse:
+    """
+    Get the complete voice library including:
+    - Voice presets with descriptions
+    - Supported input languages
+    - Supported output languages
+    """
+    try:
+        from tts import get_voice_presets, get_supported_languages
+
+        presets = get_voice_presets()
+        languages = get_supported_languages()
+
+        # Convert to response format
+        voice_presets = [
+            VoicePresetResponse(**preset) for preset in presets
+        ]
+
+        language_list = [
+            LanguageInfo(code=code, name=name)
+            for code, name in languages.items()
+        ]
+
+        return VoiceLibraryResponse(
+            voice_presets=voice_presets,
+            input_languages=language_list,
+            output_languages=language_list,
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get voice library: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get voice library: {str(e)}"
+        )
+
+
+@app.post(
+    "/tts/preview",
+    response_model=TTSPreviewResponse,
+    summary="Preview TTS Voice",
+    description="Generate a short audio preview with the selected voice and settings",
+    tags=["TTS"],
+)
+async def preview_tts(
+    request: TTSPreviewRequest,
+    user_id: str = Depends(get_current_user),
+) -> TTSPreviewResponse:
+    """
+    Generate a TTS preview with the selected voice preset and emotion settings.
+
+    This endpoint:
+    1. Takes a short text snippet (limited to 500 characters)
+    2. Generates audio using Gemini TTS
+    3. Returns base64-encoded audio for immediate playback
+    """
+    try:
+        # Limit text length for preview
+        preview_text = request.text[:500]
+        output_lang = request.output_language_code or request.input_language_code
+
+        from tts import synthesize_segment
+
+        # Generate audio
+        audio_bytes = await synthesize_segment(
+            text=preview_text,
+            preset_id=request.preset_id,
+            input_language_code=request.input_language_code,
+            output_language_code=output_lang,
+            emotion_style_prompt=request.emotion_style_prompt,
+        )
+
+        # Encode as base64 for frontend playback
+        import base64
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+        # Estimate duration (rough: ~150 words/minute, ~5 chars/word)
+        word_count = len(preview_text.split())
+        duration_estimate = word_count / 150 * 60  # seconds
+
+        logger.info(f"TTS preview generated for user {user_id}: {len(audio_bytes)} bytes")
+
+        return TTSPreviewResponse(
+            success=True,
+            audio_base64=audio_base64,
+            preset_id=request.preset_id,
+            input_language=request.input_language_code,
+            output_language=output_lang,
+            duration_estimate_seconds=round(duration_estimate, 1),
+        )
+
+    except Exception as e:
+        logger.error(f"TTS preview failed: {e}")
+        return TTSPreviewResponse(
+            success=False,
+            preset_id=request.preset_id,
+            input_language=request.input_language_code,
+            output_language=request.output_language_code or request.input_language_code,
+            error=str(e),
+        )
+
+
+# ============================================================================
 # GOOGLE DRIVE INTEGRATION ENDPOINTS
 # ============================================================================
 
 class GoogleDriveAuthUrlResponse(BaseModel):
     """Google Drive OAuth URL response"""
-    url: str
+    auth_url: str
     state: str
 
 
@@ -1072,8 +1233,8 @@ async def get_google_drive_auth_url(
     state = f"{user_id}:{secrets.token_urlsafe(16)}"
 
     try:
-        auth_url = get_oauth_url(state=state)
-        return GoogleDriveAuthUrlResponse(url=auth_url, state=state)
+        oauth_url = get_oauth_url(state=state)
+        return GoogleDriveAuthUrlResponse(auth_url=oauth_url, state=state)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1799,6 +1960,150 @@ async def run_self_test(
         pass
 
     return result
+
+
+# ============================================================================
+# MULTILINGUAL TTS SMOKE TEST
+# ============================================================================
+
+class MultilingualTestRequest(BaseModel):
+    """Request for multilingual TTS smoke test"""
+    text: str = "My heart found its home in your hands."
+    input_language_code: str = "en-US"
+    output_language_code: str = "mr-IN"  # Marathi
+    voice_preset_id: str = "romantic_female"
+    emotion_style_prompt: Optional[str] = "soft, romantic, intimate"
+
+
+class MultilingualTestResponse(BaseModel):
+    """Response from multilingual TTS smoke test"""
+    success: bool
+    job_id: Optional[str] = None
+    input_language: str
+    output_language: str
+    voice_preset: str
+    translated_text: Optional[str] = None
+    audio_r2_url: Optional[str] = None
+    audio_size_bytes: Optional[int] = None
+    duration_estimate_seconds: Optional[float] = None
+    error: Optional[str] = None
+    details: Dict[str, Any] = {}
+
+
+@app.post(
+    "/debug/multilingual-test",
+    response_model=MultilingualTestResponse,
+    tags=["Debug"],
+    summary="Run multilingual TTS smoke test",
+    description="""
+    Debug endpoint to test the full multilingual TTS pipeline.
+    Requires: GOOGLE_GENAI_API_KEY
+
+    This endpoint:
+    1. Takes a short English text
+    2. Translates it to the target language (default: Marathi)
+    3. Generates audio using Gemini TTS with specified voice preset
+    4. Uploads to R2 storage
+    5. Returns the R2 URL for playback
+    """,
+)
+async def run_multilingual_test(
+    request: MultilingualTestRequest,
+    user_id: str = Depends(get_current_user),
+) -> MultilingualTestResponse:
+    """
+    Run a multilingual TTS smoke test.
+    """
+    import uuid
+    import tempfile
+    from pathlib import Path
+
+    # Check if user is admin
+    admin_emails_str = os.getenv("ADMIN_EMAILS", "")
+    admin_emails = [e.strip().lower() for e in admin_emails_str.split(",") if e.strip()]
+
+    # Get user email
+    user_data = db.get_user(user_id)
+    user_email = user_data.get("email", "").lower() if user_data else ""
+
+    if user_email not in admin_emails:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Multilingual test endpoint is only available to admin users."
+        )
+
+    # Initialize response
+    test_id = f"mltest-{uuid.uuid4().hex[:8]}"
+    response = MultilingualTestResponse(
+        success=False,
+        job_id=test_id,
+        input_language=request.input_language_code,
+        output_language=request.output_language_code,
+        voice_preset=request.voice_preset_id,
+    )
+
+    try:
+        # Import TTS modules
+        from tts import synthesize_segment, translate_text
+
+        # Step 1: Translate if needed
+        translated_text = request.text
+        if request.input_language_code != request.output_language_code:
+            logger.info(f"[ML-TEST] Translating from {request.input_language_code} to {request.output_language_code}")
+            translated_text = await translate_text(
+                text=request.text,
+                source_lang=request.input_language_code,
+                target_lang=request.output_language_code,
+            )
+            response.translated_text = translated_text
+            response.details["original_text"] = request.text
+            logger.info(f"[ML-TEST] Translation complete: {translated_text[:100]}...")
+
+        # Step 2: Generate TTS audio
+        logger.info(f"[ML-TEST] Generating TTS with preset: {request.voice_preset_id}")
+        audio_bytes = await synthesize_segment(
+            text=translated_text,
+            preset_id=request.voice_preset_id,
+            input_language_code=request.output_language_code,  # Already translated
+            output_language_code=request.output_language_code,
+            emotion_style_prompt=request.emotion_style_prompt,
+        )
+
+        response.audio_size_bytes = len(audio_bytes)
+        logger.info(f"[ML-TEST] Generated {len(audio_bytes)} bytes of audio")
+
+        # Step 3: Upload to R2
+        storage_path = db.upload_audiobook(
+            user_id=user_id,
+            job_id=test_id,
+            filename=f"multilingual_test_{request.output_language_code}.mp3",
+            file_content=audio_bytes,
+        )
+
+        # Step 4: Get presigned URL
+        audio_url = db.get_download_url(storage_path, expires_in=3600)  # 1 hour
+        response.audio_r2_url = audio_url
+        response.details["storage_path"] = storage_path
+
+        # Estimate duration
+        word_count = len(translated_text.split())
+        response.duration_estimate_seconds = round(word_count / 150 * 60, 1)
+
+        response.success = True
+        logger.info(f"[ML-TEST] Success! Audio available at: {audio_url[:50]}...")
+
+    except ImportError as e:
+        response.error = f"Import error: {str(e)}. Make sure google-genai is installed."
+        response.details["import_error"] = str(e)
+        logger.error(f"[ML-TEST] Import error: {e}")
+
+    except Exception as e:
+        import traceback
+        response.error = f"{type(e).__name__}: {str(e)}"
+        response.details["traceback"] = traceback.format_exc()
+        logger.error(f"[ML-TEST] Error: {e}")
+
+    return response
 
 
 # ============================================================================

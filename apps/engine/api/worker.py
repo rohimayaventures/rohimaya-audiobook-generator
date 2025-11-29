@@ -196,46 +196,69 @@ async def process_job(job_id: str):
 
         # Import and run pipelines
         if mode == "single_voice":
-            from pipelines.standard_single_voice import generate_single_voice_audiobook
-
-            # Determine which TTS provider to use
-            # Priority: Google > OpenAI (Google has higher limits for long books)
-            google_api_key = os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("GOOGLE_CLOUD_API_KEY")
+            # Check if Gemini TTS is available (preferred for multilingual support)
+            google_genai_key = os.getenv("GOOGLE_GENAI_API_KEY")
             openai_api_key = os.getenv("OPENAI_API_KEY")
 
-            if tts_provider == "google" and google_api_key:
-                api_key = google_api_key
-                logger.info(f"[JOB] {job_id} - Using Google Cloud TTS")
-            elif tts_provider == "openai" and openai_api_key:
-                api_key = openai_api_key
-                logger.info(f"[JOB] {job_id} - Using OpenAI TTS")
-            elif google_api_key:
-                # Default to Google if available (better for long books)
-                api_key = google_api_key
-                tts_provider = "google"
-                logger.info(f"[JOB] {job_id} - Defaulting to Google Cloud TTS (recommended for long books)")
+            # Get language settings from job (with defaults for backwards compatibility)
+            input_language = job.get("input_language_code", "en-US")
+            output_language = job.get("output_language_code") or input_language
+            voice_preset_id = job.get("voice_preset_id") or job.get("narrator_voice_id", "studio_neutral")
+            emotion_style = job.get("emotion_style_prompt")
+
+            # Use Gemini TTS if available (recommended for multilingual)
+            if google_genai_key and tts_provider in ("google", "gemini"):
+                from pipelines.gemini_single_voice import generate_gemini_audiobook
+
+                logger.info(f"[JOB] {job_id} - Using Gemini TTS (multilingual)")
+                logger.info(f"[JOB] {job_id} - Voice preset: {voice_preset_id}")
+                logger.info(f"[JOB] {job_id} - Input language: {input_language}")
+                logger.info(f"[JOB] {job_id} - Output language: {output_language}")
+                if emotion_style:
+                    logger.info(f"[JOB] {job_id} - Emotion/style: {emotion_style}")
+
+                db.update_job(job_id, {"progress_percent": 15.0})
+
+                # Progress callback to update job
+                def progress_callback(percent: float, message: str):
+                    # Scale progress from 15% to 80%
+                    scaled = 15 + (percent / 100 * 65)
+                    db.update_job(job_id, {
+                        "progress_percent": scaled,
+                        "current_step": message,
+                    })
+
+                audio_files = await generate_gemini_audiobook(
+                    manuscript_text=manuscript_text,
+                    output_dir=output_dir,
+                    voice_preset_id=voice_preset_id,
+                    input_language_code=input_language,
+                    output_language_code=output_language,
+                    emotion_style_prompt=emotion_style,
+                    book_title=job["title"],
+                    progress_callback=progress_callback,
+                )
+
             elif openai_api_key:
-                # Fallback to OpenAI
-                api_key = openai_api_key
-                tts_provider = "openai"
-                logger.info(f"[JOB] {job_id} - Falling back to OpenAI TTS")
+                # Fallback to OpenAI TTS (legacy path)
+                from pipelines.standard_single_voice import generate_single_voice_audiobook
+
+                logger.info(f"[JOB] {job_id} - Using OpenAI TTS (fallback)")
+
+                db.update_job(job_id, {"progress_percent": 15.0})
+
+                audio_files = await asyncio.to_thread(
+                    generate_single_voice_audiobook,
+                    manuscript_text,
+                    output_dir,
+                    openai_api_key,
+                    job["narrator_voice_id"],
+                    "openai",
+                    job["title"],
+                )
+
             else:
                 raise ValueError("No TTS API key configured. Set GOOGLE_GENAI_API_KEY or OPENAI_API_KEY")
-
-            # Run pipeline
-            logger.info(f"[PIPELINE] {job_id} - Running single-voice pipeline with {tts_provider}")
-
-            db.update_job(job_id, {"progress_percent": 15.0})
-
-            audio_files = await asyncio.to_thread(
-                generate_single_voice_audiobook,
-                manuscript_text,
-                output_dir,
-                api_key,
-                job["narrator_voice_id"],
-                tts_provider,
-                job["title"],  # Pass book title for final merged file
-            )
 
         elif mode == "dual_voice":
             from pipelines.phoenix_peacock_dual_voice import generate_dual_voice_audiobook

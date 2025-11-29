@@ -15,26 +15,38 @@ import {
   listGoogleDriveFiles,
   importGoogleDriveFile,
   disconnectGoogleDrive,
+  getVoiceLibrary,
+  previewTTSVoice,
   type Job,
   type GoogleDriveFile,
   type GoogleDriveStatus,
+  type VoicePreset,
+  type LanguageInfo,
 } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 import { getBillingInfo, type BillingInfo, PLANS } from '@/lib/billing'
 
-// Voice options (OpenAI TTS voices)
-const VOICES = [
-  { id: 'alloy', name: 'Alloy', description: 'Neutral, versatile - general narration', gender: 'neutral' },
-  { id: 'ash', name: 'Ash', description: 'Warm, conversational - dialogue stories', gender: 'male' },
-  { id: 'ballad', name: 'Ballad', description: 'Smooth, melodic - poetry & literary fiction', gender: 'male' },
-  { id: 'coral', name: 'Coral', description: 'Clear, professional - non-fiction', gender: 'female' },
-  { id: 'echo', name: 'Echo', description: 'Deep, resonant - thrillers & mysteries', gender: 'male' },
-  { id: 'fable', name: 'Fable', description: 'Expressive storyteller - fantasy & children\'s', gender: 'female' },
-  { id: 'onyx', name: 'Onyx', description: 'Deep, authoritative - business & history', gender: 'male' },
-  { id: 'nova', name: 'Nova', description: 'Bright, energetic - self-help & motivation', gender: 'female' },
-  { id: 'sage', name: 'Sage', description: 'Calm, wise - meditation & wellness', gender: 'female' },
-  { id: 'shimmer', name: 'Shimmer', description: 'Soft, gentle - romance & drama', gender: 'female' },
-  { id: 'verse', name: 'Verse', description: 'Dynamic, engaging - adventure & action', gender: 'male' },
+// Fallback voices (used if API voice library fails to load)
+const FALLBACK_VOICES = [
+  { id: 'studio_neutral', label: 'Studio Narrator', description: 'Neutral, studio-quality voice', gender: 'neutral', default_language_code: 'en-US' },
+  { id: 'narrator_female_warm', label: 'Warm Female Narrator', description: 'Warm, engaging female narrator', gender: 'female', default_language_code: 'en-US' },
+  { id: 'narrator_male_calm', label: 'Calm Male Narrator', description: 'Calm, professional male narrator', gender: 'male', default_language_code: 'en-US' },
+  { id: 'romantic_female', label: 'Romantic Female', description: 'Soft, intimate voice for romance', gender: 'female', default_language_code: 'en-US' },
+  { id: 'romantic_male', label: 'Romantic Male', description: 'Deep, passionate voice for romance', gender: 'male', default_language_code: 'en-US' },
+]
+
+// Fallback languages
+const FALLBACK_LANGUAGES = [
+  { code: 'auto', name: 'Auto-detect' },
+  { code: 'en-US', name: 'English (US)' },
+  { code: 'en-GB', name: 'English (UK)' },
+  { code: 'es-ES', name: 'Spanish (Spain)' },
+  { code: 'fr-FR', name: 'French' },
+  { code: 'de-DE', name: 'German' },
+  { code: 'hi-IN', name: 'Hindi' },
+  { code: 'mr-IN', name: 'Marathi' },
+  { code: 'ja-JP', name: 'Japanese' },
+  { code: 'pt-BR', name: 'Portuguese (Brazil)' },
 ]
 
 // Output format options
@@ -75,10 +87,23 @@ function DashboardContent() {
   const [file, setFile] = useState<File | null>(null)
   const [text, setText] = useState('')
   const [title, setTitle] = useState('')
-  const [voiceId, setVoiceId] = useState('alloy')
   const [outputFormat, setOutputFormat] = useState('mp3')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
+
+  // Voice library state
+  const [voicePresets, setVoicePresets] = useState<VoicePreset[]>([])
+  const [inputLanguages, setInputLanguages] = useState<LanguageInfo[]>(FALLBACK_LANGUAGES)
+  const [outputLanguages, setOutputLanguages] = useState<LanguageInfo[]>(FALLBACK_LANGUAGES)
+  const [loadingVoiceLibrary, setLoadingVoiceLibrary] = useState(true)
+
+  // TTS settings
+  const [selectedVoiceId, setSelectedVoiceId] = useState('studio_neutral')
+  const [inputLanguage, setInputLanguage] = useState('en-US')
+  const [outputLanguage, setOutputLanguage] = useState('')  // Empty means same as input
+  const [emotionStyle, setEmotionStyle] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewAudio, setPreviewAudio] = useState<string | null>(null)
 
   // Cover art options
   const [generateCover, setGenerateCover] = useState(false)
@@ -93,7 +118,7 @@ function DashboardContent() {
   const [driveImporting, setDriveImporting] = useState(false)
   const [importedManuscriptPath, setImportedManuscriptPath] = useState<string | null>(null)
 
-  // Fetch user, jobs, billing info, and Google Drive status on mount
+  // Fetch user, jobs, billing info, voice library, and Google Drive status on mount
   useEffect(() => {
     const fetchData = async () => {
       const currentUser = await getCurrentUser()
@@ -120,6 +145,18 @@ function DashboardContent() {
         console.error('Failed to fetch billing info:', err)
       }
       setLoadingBilling(false)
+
+      // Fetch voice library (presets and languages)
+      try {
+        const library = await getVoiceLibrary()
+        setVoicePresets(library.voice_presets)
+        setInputLanguages(library.input_languages)
+        setOutputLanguages(library.output_languages)
+      } catch (err) {
+        console.error('Failed to fetch voice library:', err)
+        // Keep using fallback voices/languages
+      }
+      setLoadingVoiceLibrary(false)
 
       // Fetch Google Drive status
       try {
@@ -197,6 +234,38 @@ function DashboardContent() {
     setDriveImporting(false)
   }
 
+  // Preview voice with sample text
+  const handlePreviewVoice = async () => {
+    setPreviewLoading(true)
+    setPreviewAudio(null)
+
+    try {
+      const response = await previewTTSVoice({
+        preset_id: selectedVoiceId,
+        input_language_code: inputLanguage,
+        output_language_code: outputLanguage || undefined,
+        emotion_style_prompt: emotionStyle || undefined,
+      })
+
+      if (response.success && response.audio_base64) {
+        // Create audio URL from base64
+        const audioUrl = `data:audio/mp3;base64,${response.audio_base64}`
+        setPreviewAudio(audioUrl)
+
+        // Auto-play the preview
+        const audio = new Audio(audioUrl)
+        audio.play().catch(console.error)
+      } else {
+        setCreateError(response.error || 'Failed to generate preview')
+      }
+    } catch (err) {
+      console.error('Failed to preview voice:', err)
+      setCreateError(err instanceof Error ? err.message : 'Failed to preview voice')
+    }
+
+    setPreviewLoading(false)
+  }
+
   // File dropzone
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -251,10 +320,15 @@ function DashboardContent() {
         title: title || (file?.name.replace(/\.[^/.]+$/, '') || selectedDriveFile?.name.replace(/\.[^/.]+$/, '') || 'Untitled'),
         source_type: sourceType,
         mode: 'single_voice' as const,
-        tts_provider: 'openai' as const,
-        narrator_voice_id: voiceId,
+        tts_provider: 'google' as const,  // Use Gemini TTS
+        narrator_voice_id: selectedVoiceId,
+        voice_preset_id: selectedVoiceId,
         audio_format: outputFormat,
         audio_bitrate: '128k',
+        // Multilingual TTS settings
+        input_language_code: inputLanguage,
+        ...(outputLanguage ? { output_language_code: outputLanguage } : {}),
+        ...(emotionStyle.trim() ? { emotion_style_prompt: emotionStyle.trim() } : {}),
         // Text or Google Drive source path
         ...(inputMode === 'text' ? { manuscript_text: text } : {}),
         ...(inputMode === 'google_drive' && importedManuscriptPath ? { source_path: importedManuscriptPath } : {}),
@@ -280,6 +354,8 @@ function DashboardContent() {
       setImportedManuscriptPath(null)
       setGenerateCover(false)
       setCoverDescription('')
+      setEmotionStyle('')
+      setPreviewAudio(null)
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create job')
     }
@@ -592,22 +668,101 @@ function DashboardContent() {
               />
             </div>
 
-            {/* Narrator Voice */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-white/80 mb-2">
-                Narrator Voice
-              </label>
-              <select
-                value={voiceId}
-                onChange={(e) => setVoiceId(e.target.value)}
-                className="input-field"
-              >
-                {VOICES.map((voice) => (
-                  <option key={voice.id} value={voice.id}>
-                    {voice.name} - {voice.description}
-                  </option>
-                ))}
-              </select>
+            {/* Language & Voice Section */}
+            <div className="mt-6 p-4 rounded-lg bg-af-card border border-af-card-border">
+              <h4 className="text-sm font-semibold text-white/90 mb-4">Language & Voice</h4>
+
+              {/* Input Language */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Manuscript Language
+                </label>
+                <select
+                  value={inputLanguage}
+                  onChange={(e) => setInputLanguage(e.target.value)}
+                  className="input-field"
+                >
+                  {inputLanguages.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Output Language (for translation) */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Audio Output Language
+                  <span className="text-white/40 text-xs ml-2">(leave empty for same as manuscript)</span>
+                </label>
+                <select
+                  value={outputLanguage}
+                  onChange={(e) => setOutputLanguage(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">Same as manuscript</option>
+                  {outputLanguages.filter(l => l.code !== 'auto').map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Voice Preset */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Narrator Voice
+                </label>
+                <select
+                  value={selectedVoiceId}
+                  onChange={(e) => setSelectedVoiceId(e.target.value)}
+                  className="input-field"
+                  disabled={loadingVoiceLibrary}
+                >
+                  {(voicePresets.length > 0 ? voicePresets : FALLBACK_VOICES).map((voice) => (
+                    <option key={voice.id} value={voice.id}>
+                      {voice.label} - {voice.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Emotion/Style */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Emotion / Style
+                  <span className="text-white/40 text-xs ml-2">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={emotionStyle}
+                  onChange={(e) => setEmotionStyle(e.target.value)}
+                  placeholder="e.g., soft, romantic, intimate"
+                  className="input-field"
+                />
+                <p className="text-xs text-white/40 mt-1">
+                  Describe how you want the voice to sound
+                </p>
+              </div>
+
+              {/* Preview Button */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handlePreviewVoice}
+                  disabled={previewLoading}
+                  className="px-4 py-2 rounded-lg bg-af-purple/20 hover:bg-af-purple/30 text-af-purple text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {previewLoading ? 'Generating...' : 'Preview Voice'}
+                </button>
+                {previewAudio && (
+                  <audio controls src={previewAudio} className="h-8 flex-1">
+                    Your browser does not support audio playback.
+                  </audio>
+                )}
+              </div>
             </div>
 
             {/* Audio Format */}
