@@ -341,7 +341,7 @@ Streamlit Cloud
 
 ### Future
 - elevenlabs (voice cloning)
-- anthropic (Claude for text analysis)
+- Advanced text analysis capabilities
 
 ---
 

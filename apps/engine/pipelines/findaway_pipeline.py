@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Import agents and helpers
 from ..agents.manuscript_parser_agent import parse_manuscript_structure
 from ..agents.retail_sample_agent import select_retail_sample_excerpt
-from ..core.findaway_planner import build_findaway_section_plan
+from ..core.findaway_planner import build_findaway_section_plan, get_sections_for_tts
 from ..core.cover_generator import generate_cover_image, save_cover_to_file, get_cover_filename
 
 
@@ -120,10 +120,12 @@ def generate_findaway_audiobook(
             manuscript_structure=manuscript_structure,
             api_key=api_key,
             target_duration_minutes=4.0,
-            preferred_style=book_metadata.get("sample_style", "default"),
+            preferred_style=book_metadata.get("sample_style", "auto"),  # Auto-detect by default
+            genre=book_metadata.get("genre"),  # Pass genre for better detection
             model="gpt-4o-mini"
         )
-        logger.info(f"Selected retail sample: {retail_sample.get('approx_word_count', 0)} words")
+        detected_style = retail_sample.get("detected_style", "default")
+        logger.info(f"Selected retail sample: {retail_sample.get('approx_word_count', 0)} words (style: {detected_style})")
     except Exception as e:
         logger.error(f"Retail sample selection failed: {e}")
         retail_sample = _create_fallback_sample(manuscript_structure)
@@ -141,8 +143,9 @@ def generate_findaway_audiobook(
         retail_sample=retail_sample
     )
 
-    sections = section_plan.get("sections", [])
-    logger.info(f"Section plan created: {len(sections)} sections")
+    # Get flattened list of all sections that need TTS generation
+    sections = get_sections_for_tts(section_plan)
+    logger.info(f"Section plan created: {len(sections)} sections for TTS")
 
     update_progress(30, f"Section plan ready: {len(sections)} sections")
 
@@ -181,9 +184,9 @@ def generate_findaway_audiobook(
     audio_progress_range = audio_progress_end - audio_progress_start
 
     for i, section in enumerate(sections):
-        section_progress = audio_progress_start + (i / len(sections)) * audio_progress_range
-        section_type = section.get("type", "unknown")
-        section_title = section.get("title", f"Section {i+1}")
+        section_progress = audio_progress_start + (i / len(sections)) * audio_progress_range if len(sections) > 0 else audio_progress_start
+        section_type = section.get("section_type", section.get("type", "unknown"))
+        section_title = section.get("title") or section.get("name") or section.get("section_id", f"Section {i+1}")
 
         update_progress(section_progress, f"Generating audio: {section_title}")
 
@@ -215,6 +218,7 @@ def generate_findaway_audiobook(
         section_plan=section_plan,
         cover_path=cover_path,
         total_duration_seconds=total_duration_seconds,
+        generated_sections=sections,
     )
 
     manifest_path = output_dir / "manifest.json"
@@ -273,23 +277,33 @@ def _generate_section_audio(
     """
     from openai import OpenAI
 
-    text = section.get("text", "").strip()
+    # Get text content - credits use "script", others use "text"
+    text = section.get("text") or section.get("script", "")
+    text = text.strip() if text else ""
     if not text:
         logger.warning(f"Section {index} has no text, skipping")
         return None, 0
 
-    section_type = section.get("type", "chapter")
-    title = section.get("title", f"Section {index}")
+    # Get section type - use section_type field from planner
+    section_type = section.get("section_type", section.get("type", "chapter"))
+    # Get title - credits don't have title, use section_id
+    title = section.get("title") or section.get("name") or section.get("section_id", f"Section {index}")
 
-    # Create filename with ordering prefix
+    # Create filename with ordering prefix based on section_type from planner
     type_prefix = {
-        "opening_credits": "01",
+        "credits": "01",           # Opening credits (also ending gets remapped below)
         "front_matter": "02",
         "chapter": "03",
         "back_matter": "04",
-        "ending_credits": "05",
-        "retail_sample": "06",
+        "sample": "06",            # Retail sample
     }.get(section_type, "03")
+
+    # Special handling for ending credits vs opening credits
+    section_id = section.get("section_id", "")
+    if section_id == "ending_credits":
+        type_prefix = "05"
+    elif section_id == "opening_credits":
+        type_prefix = "01"
 
     # Sanitize title for filename
     safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).strip()
@@ -496,20 +510,22 @@ def _create_manifest(
     section_plan: Dict[str, Any],
     cover_path: Optional[Path],
     total_duration_seconds: int,
+    generated_sections: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Create Findaway-compatible manifest JSON."""
-    sections = section_plan.get("sections", [])
+    # Use the generated sections list if provided, otherwise get from plan
+    sections = generated_sections if generated_sections else get_sections_for_tts(section_plan)
 
     # Build audio files list
     audio_files = []
-    for section in sections:
+    for i, section in enumerate(sections):
         if section.get("audio_path"):
             audio_files.append({
                 "filename": section["audio_path"],
-                "type": section.get("type"),
-                "title": section.get("title"),
+                "type": section.get("section_type", section.get("type")),
+                "title": section.get("title") or section.get("name") or section.get("section_id"),
                 "duration_seconds": section.get("duration_seconds", 0),
-                "order": section.get("order", 0),
+                "order": i,
             })
 
     return {
@@ -543,20 +559,23 @@ def _create_manifest(
             "format": "png",
         } if cover_path else None,
 
-        "credits": section_plan.get("credits", {}),
+        "credits": {
+            "opening": section_plan.get("opening_credits", {}).get("script"),
+            "ending": section_plan.get("ending_credits", {}).get("script"),
+        },
 
         "retail_sample": {
             "filename": next(
-                (s["audio_path"] for s in sections if s.get("type") == "retail_sample"),
+                (s["audio_path"] for s in sections if s.get("section_type") == "sample" or s.get("section_id") == "retail_sample"),
                 None
             ),
-            "source_chapter": section_plan.get("retail_sample", {}).get("source_chapter"),
+            "source_chapter": section_plan.get("retail_sample", {}).get("chapter_index"),
         },
 
         "findaway_compliance": {
-            "has_opening_credits": any(s.get("type") == "opening_credits" for s in sections),
-            "has_ending_credits": any(s.get("type") == "ending_credits" for s in sections),
-            "has_retail_sample": any(s.get("type") == "retail_sample" for s in sections),
+            "has_opening_credits": any(s.get("section_id") == "opening_credits" for s in sections),
+            "has_ending_credits": any(s.get("section_id") == "ending_credits" for s in sections),
+            "has_retail_sample": any(s.get("section_id") == "retail_sample" for s in sections),
             "cover_dimensions_valid": cover_path is not None,
         }
     }

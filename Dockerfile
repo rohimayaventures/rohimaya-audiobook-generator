@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the engine application
 COPY apps/engine/ .
 
+# Set PYTHONPATH so absolute imports work (pipelines, agents, core, etc.)
+ENV PYTHONPATH=/app
+
 # Expose port (Railway sets PORT env var)
 EXPOSE 8000
 

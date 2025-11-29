@@ -196,7 +196,7 @@ async def process_job(job_id: str):
                 logger.warning(f"[JOB] {job_id} - Forcing provider from {tts_provider} to openai (only supported)")
                 tts_provider = "openai"
 
-            from ..pipelines.standard_single_voice import generate_single_voice_audiobook
+            from pipelines.standard_single_voice import generate_single_voice_audiobook
 
             # Get API key
             api_key = os.getenv("OPENAI_API_KEY")
@@ -219,7 +219,7 @@ async def process_job(job_id: str):
             )
 
         elif mode == "dual_voice":
-            from ..pipelines.phoenix_peacock_dual_voice import generate_dual_voice_audiobook
+            from pipelines.phoenix_peacock_dual_voice import generate_dual_voice_audiobook
 
             # Get API key (dual-voice uses ElevenLabs)
             api_key = os.getenv("ELEVENLABS_API_KEY")
@@ -244,7 +244,7 @@ async def process_job(job_id: str):
 
         elif mode == "findaway":
             # Findaway-ready package with cover, manifest, and ZIP
-            from ..pipelines.findaway_pipeline import generate_findaway_audiobook
+            from pipelines.findaway_pipeline import generate_findaway_audiobook
 
             # Get API key (Findaway uses OpenAI for TTS and cover)
             api_key = os.getenv("OPENAI_API_KEY")

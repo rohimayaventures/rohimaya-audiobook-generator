@@ -18,7 +18,7 @@ AuthorFlow Studios is **85% complete** with solid architecture and most features
 | Manuscript Intake | ✅ PRODUCTION READY | 100% |
 | Manuscript Parsing | ⚠️ MOSTLY COMPLETE | 85% |
 | TTS & Voice Systems | ⚠️ WORKING BUT LIMITED | 80% |
-| Findaway Pipeline | ❌ CRITICAL BUG | 70% |
+| Findaway Pipeline | ✅ FIXED | 95% |
 | Cover Art Generation | ✅ PRODUCTION READY | 95% |
 | Billing & Subscriptions | ⚠️ MOSTLY COMPLETE | 90% |
 | Job Management | ✅ PRODUCTION READY | 95% |
@@ -26,32 +26,34 @@ AuthorFlow Studios is **85% complete** with solid architecture and most features
 
 ---
 
-## CRITICAL ISSUES (Must Fix Before Launch)
+## RECENTLY FIXED ISSUES
 
-### 1. Findaway Pipeline Section Plan Bug
+### 1. Findaway Pipeline Section Plan Bug ✅ FIXED
 
-**Severity:** CRITICAL - Pipeline will not generate audio
-**File:** `apps/engine/pipelines/findaway_pipeline.py:144`
+**Severity:** Was CRITICAL
+**File:** `apps/engine/pipelines/findaway_pipeline.py`
 
-**Problem:**
-```python
-section_plan = build_findaway_section_plan(...)
-sections = section_plan.get("sections", [])  # BUG: "sections" key doesn't exist!
-```
-
-The `build_findaway_section_plan()` returns a dict with keys like `opening_credits`, `body_matter`, `ending_credits` - but NOT a `sections` key. This means the audio generation loop iterates 0 times, producing empty ZIPs.
-
-**Impact:**
-- No audio files generated
-- Empty Findaway packages
-- All Findaway jobs will "complete" with empty ZIP files
-
-**Fix Required:**
-Use the existing `get_sections_for_tts()` helper function in `findaway_planner.py:305-353` to flatten the section plan before iteration.
+**Solution Applied:**
+- Now uses `get_sections_for_tts()` to properly flatten the section plan
+- Updated `_generate_section_audio()` to handle both `text` and `script` fields
+- Updated manifest creation to use correct field names
 
 ---
 
-### 2. Missing Email Notifications
+### 2. Romance/Spicy Auto-Detection ✅ FIXED
+
+**File:** `apps/engine/agents/retail_sample_agent.py`
+
+**Solution Applied:**
+- Added `detect_romance_heat_level()` function with keyword analysis
+- Retail sample selection now defaults to "auto" mode
+- Automatically detects romance content and adjusts sample style
+
+---
+
+## REMAINING ISSUES
+
+### 1. Missing Email Notifications
 
 **Severity:** HIGH - Poor user experience
 **Files:** `apps/engine/api/billing/webhook.py:364, 403`
@@ -120,18 +122,7 @@ Implement email sending using Brevo/SendGrid/Resend for:
 
 ---
 
-### 7. Romance/Spicy Detection is Manual
-
-**File:** `apps/engine/agents/retail_sample_agent.py`
-
-**Current State:** Users must manually select "spicy" or "ultra_spicy" mode.
-**Missing:** No automatic detection of romance heat levels in manuscripts.
-
-**Impact:** Extra user friction; could auto-detect for romance genre.
-
----
-
-### 8. No Retry Limit Enforcement
+### 7. No Retry Limit Enforcement
 
 **File:** `apps/engine/api/main.py:703`
 

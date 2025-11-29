@@ -278,7 +278,7 @@ nul
 _backup_original_repo/
 _backup_peacock_phoenix_repo/
 
-# Claude Code metadata (optional - keep local)
+# IDE and tool metadata (keep local)
 .claude/
 
 # Old structure (deprecated - moved to apps/engine/)

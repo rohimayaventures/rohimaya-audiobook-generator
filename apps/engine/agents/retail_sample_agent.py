@@ -83,13 +83,114 @@ For best results, look for:
 The sample should be provocative but not explicit - think "R-rated trailer" energy.
 """
 
+# Keywords for auto-detecting romance content
+ROMANCE_KEYWORDS = [
+    # Romance genre indicators
+    "romance", "love story", "romantic", "passion", "desire",
+    # Physical descriptions
+    "lips", "kiss", "kissed", "kissing", "embrace", "embraced",
+    "touch", "touched", "caress", "caressed", "breath", "breathless",
+    "heart", "heartbeat", "pulse", "flutter", "trembled",
+    # Emotional indicators
+    "attraction", "chemistry", "tension", "longing", "yearning",
+    "ache", "ached", "wanted", "craved", "needed",
+    # Character dynamics
+    "gazed", "stared", "eyes met", "looked at him", "looked at her",
+    "drew closer", "leaned in", "pulled close", "held her", "held him",
+]
+
+SPICY_KEYWORDS = [
+    # Higher heat indicators
+    "heat", "heated", "burning", "fire", "flame",
+    "skin", "bare", "naked", "undressed",
+    "whispered", "moaned", "groaned", "gasped",
+    "bed", "bedroom", "sheets", "pillow",
+    "body", "bodies", "curves", "muscles",
+    "desire", "wanted", "needed", "craved",
+    "pleasure", "sensation", "shiver", "shivered",
+    "intimate", "intimacy", "passion", "passionate",
+]
+
+
+def detect_romance_heat_level(
+    manuscript_structure: Dict[str, Any],
+    genre: Optional[str] = None
+) -> str:
+    """
+    Auto-detect the romance heat level of a manuscript.
+
+    Args:
+        manuscript_structure: Parsed manuscript from manuscript_parser_agent
+        genre: Optional genre hint from metadata
+
+    Returns:
+        "default" | "spicy" | "ultra_spicy"
+    """
+    # Check genre first
+    if genre:
+        genre_lower = genre.lower()
+        if any(term in genre_lower for term in ["erotica", "steamy", "adult romance", "spicy"]):
+            return "ultra_spicy"
+        if any(term in genre_lower for term in ["romance", "romantic", "love"]):
+            # Romance genre detected, continue to content analysis
+            pass
+        else:
+            # Non-romance genre
+            return "default"
+
+    # Analyze content from first 3 chapters
+    chapters = manuscript_structure.get("chapters", [])
+    early_chapters = [c for c in chapters if c.get("index", 0) <= 3][:3]
+
+    if not early_chapters:
+        return "default"
+
+    # Combine text from early chapters (limit to reasonable size)
+    combined_text = ""
+    for chapter in early_chapters:
+        text = chapter.get("text", "")[:15000]  # ~3750 words per chapter
+        combined_text += " " + text
+
+    combined_text_lower = combined_text.lower()
+
+    # Count keyword occurrences
+    romance_score = 0
+    spicy_score = 0
+
+    for keyword in ROMANCE_KEYWORDS:
+        romance_score += combined_text_lower.count(keyword)
+
+    for keyword in SPICY_KEYWORDS:
+        spicy_score += combined_text_lower.count(keyword)
+
+    # Calculate density (per 1000 words)
+    word_count = len(combined_text.split())
+    if word_count == 0:
+        return "default"
+
+    romance_density = (romance_score / word_count) * 1000
+    spicy_density = (spicy_score / word_count) * 1000
+
+    logger.info(f"Romance detection - romance_density: {romance_density:.2f}, spicy_density: {spicy_density:.2f}")
+
+    # Thresholds for classification
+    if spicy_density > 8:  # High spicy content
+        return "ultra_spicy"
+    elif spicy_density > 4 or (romance_density > 10 and spicy_density > 2):
+        return "spicy"
+    elif romance_density > 5:
+        return "spicy"
+    else:
+        return "default"
+
 
 def select_retail_sample_excerpt(
     manuscript_structure: Dict[str, Any],
     api_key: str,
     target_duration_minutes: float = 4.0,
     average_words_per_minute: int = 150,
-    preferred_style: str = "default",  # "default" | "spicy" | "ultra_spicy"
+    preferred_style: str = "auto",  # "auto" | "default" | "spicy" | "ultra_spicy"
+    genre: Optional[str] = None,
     model: str = "gpt-4o-mini"
 ) -> Dict[str, Any]:
     """
@@ -100,7 +201,8 @@ def select_retail_sample_excerpt(
         api_key: OpenAI API key
         target_duration_minutes: Target length in minutes (default 4)
         average_words_per_minute: Reading speed assumption (default 150)
-        preferred_style: "default" or "spicy" for romance novels
+        preferred_style: "auto" (auto-detect), "default", "spicy", or "ultra_spicy"
+        genre: Optional genre from metadata (helps with auto-detection)
         model: OpenAI model to use
 
     Returns:
@@ -113,11 +215,19 @@ def select_retail_sample_excerpt(
             "end_marker": str,
             "approx_word_count": int,
             "approx_duration_seconds": int,
-            "reason": str
+            "reason": str,
+            "detected_style": str  # The style used (useful when auto-detecting)
         }
     """
     target_words = int(target_duration_minutes * average_words_per_minute)
-    logger.info(f"Selecting retail sample: target {target_words} words (~{target_duration_minutes} min)")
+
+    # Auto-detect romance heat level if set to "auto"
+    actual_style = preferred_style
+    if preferred_style == "auto":
+        actual_style = detect_romance_heat_level(manuscript_structure, genre)
+        logger.info(f"Auto-detected romance style: {actual_style}")
+
+    logger.info(f"Selecting retail sample: target {target_words} words (~{target_duration_minutes} min), style: {actual_style}")
 
     # Get early chapters (1-3) for sample selection
     chapters = manuscript_structure.get("chapters", [])
@@ -141,11 +251,11 @@ def select_retail_sample_excerpt(
         text = chapter.get("text", "")[:20000]  # ~5k tokens per chapter
         chapters_text += f"\n\n=== CHAPTER {chapter.get('index', '?')}: {chapter.get('title', 'Untitled')} ===\n\n{text}"
 
-    # Build prompt
+    # Build prompt based on detected/specified style
     system_prompt = SAMPLE_SELECTOR_PROMPT
-    if preferred_style == "spicy":
+    if actual_style == "spicy":
         system_prompt += SPICY_PROMPT_ADDITION
-    elif preferred_style == "ultra_spicy":
+    elif actual_style == "ultra_spicy":
         system_prompt += ULTRA_SPICY_PROMPT_ADDITION
 
     client = OpenAI(api_key=api_key)
@@ -171,7 +281,10 @@ def select_retail_sample_excerpt(
         # Validate result
         result = _validate_sample_result(result, early_chapters, target_words)
 
-        logger.info(f"Selected retail sample from Chapter {result.get('chapter_index')}: {result.get('approx_word_count')} words")
+        # Add detected style to result
+        result["detected_style"] = actual_style
+
+        logger.info(f"Selected retail sample from Chapter {result.get('chapter_index')}: {result.get('approx_word_count')} words (style: {actual_style})")
         return result
 
     except json.JSONDecodeError as e:
