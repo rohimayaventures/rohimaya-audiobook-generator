@@ -468,7 +468,7 @@ async def create_job_with_upload(
         )
 
     # Validate file type
-    allowed_extensions = ['.txt', '.docx', '.pdf', '.md']
+    allowed_extensions = ['.txt', '.docx', '.pdf', '.md', '.html', '.htm', '.epub']
     file_ext = Path(file.filename).suffix.lower() if file.filename else ''
     if file_ext not in allowed_extensions:
         raise HTTPException(

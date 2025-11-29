@@ -54,6 +54,177 @@ job_queue: asyncio.Queue = asyncio.Queue()
 processing_jobs: set = set()
 
 
+def extract_text_from_file(file_content: bytes, source_path: str) -> str:
+    """
+    Extract text from various file formats (DOCX, PDF, TXT, MD, HTML).
+
+    Args:
+        file_content: Raw file bytes
+        source_path: Original file path (to determine extension)
+
+    Returns:
+        Extracted text content
+
+    Raises:
+        ValueError: If file format is unsupported or extraction fails
+    """
+    import io
+
+    # Determine file extension from source path
+    ext = Path(source_path).suffix.lower() if source_path else ""
+
+    logger.info(f"[EXTRACT] Extracting text from file with extension: {ext}")
+
+    # Plain text formats - just decode
+    if ext in (".txt", ".md", ".markdown", ".text"):
+        # Try multiple encodings
+        for encoding in ["utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]:
+            try:
+                text = file_content.decode(encoding)
+                logger.info(f"[EXTRACT] Decoded text file with encoding: {encoding}")
+                return text
+            except UnicodeDecodeError:
+                continue
+        # Last resort
+        text = file_content.decode("utf-8", errors="ignore")
+        logger.warning("[EXTRACT] Decoded text file with utf-8 (errors ignored)")
+        return text
+
+    # DOCX files - extract from XML in ZIP
+    elif ext == ".docx":
+        try:
+            import zipfile
+            import xml.etree.ElementTree as ET
+
+            logger.info("[EXTRACT] Extracting text from DOCX file")
+            text_parts = []
+
+            with zipfile.ZipFile(io.BytesIO(file_content)) as zf:
+                # Read document.xml
+                with zf.open("word/document.xml") as doc_xml:
+                    tree = ET.parse(doc_xml)
+                    root = tree.getroot()
+
+                    # Word namespace
+                    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+                    # Iterate through paragraphs to preserve structure
+                    for para in root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"):
+                        para_texts = []
+                        for t in para.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"):
+                            if t.text:
+                                para_texts.append(t.text)
+                        if para_texts:
+                            text_parts.append("".join(para_texts))
+
+            text = "\n\n".join(text_parts)
+            logger.info(f"[EXTRACT] Extracted {len(text)} chars from DOCX ({len(text_parts)} paragraphs)")
+            return text
+
+        except Exception as e:
+            logger.error(f"[EXTRACT] DOCX extraction failed: {e}")
+            raise ValueError(f"Failed to extract text from DOCX: {e}")
+
+    # PDF files - use PyPDF2
+    elif ext == ".pdf":
+        try:
+            import PyPDF2
+
+            logger.info("[EXTRACT] Extracting text from PDF file")
+            reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+            text_parts = []
+
+            for i, page in enumerate(reader.pages):
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+                logger.debug(f"[EXTRACT] PDF page {i+1}: {len(page_text) if page_text else 0} chars")
+
+            text = "\n\n".join(text_parts)
+            logger.info(f"[EXTRACT] Extracted {len(text)} chars from PDF ({len(reader.pages)} pages)")
+            return text
+
+        except Exception as e:
+            logger.error(f"[EXTRACT] PDF extraction failed: {e}")
+            raise ValueError(f"Failed to extract text from PDF: {e}")
+
+    # HTML files - strip tags
+    elif ext in (".html", ".htm"):
+        try:
+            import re
+
+            logger.info("[EXTRACT] Extracting text from HTML file")
+            # Decode first
+            html = file_content.decode("utf-8", errors="ignore")
+
+            # Remove script and style elements
+            html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+
+            # Replace block elements with newlines
+            html = re.sub(r'<(p|div|br|h[1-6]|li)[^>]*>', '\n', html, flags=re.IGNORECASE)
+
+            # Remove all remaining tags
+            text = re.sub(r'<[^>]+>', '', html)
+
+            # Clean up whitespace
+            text = re.sub(r'\n\s*\n', '\n\n', text)
+            text = text.strip()
+
+            logger.info(f"[EXTRACT] Extracted {len(text)} chars from HTML")
+            return text
+
+        except Exception as e:
+            logger.error(f"[EXTRACT] HTML extraction failed: {e}")
+            raise ValueError(f"Failed to extract text from HTML: {e}")
+
+    # EPUB files - basic extraction
+    elif ext == ".epub":
+        try:
+            import zipfile
+            import re
+
+            logger.info("[EXTRACT] Extracting text from EPUB file")
+            text_parts = []
+
+            with zipfile.ZipFile(io.BytesIO(file_content)) as zf:
+                for name in zf.namelist():
+                    if name.endswith(('.xhtml', '.html', '.htm')):
+                        with zf.open(name) as f:
+                            html = f.read().decode("utf-8", errors="ignore")
+                            # Strip HTML tags
+                            text = re.sub(r'<[^>]+>', '', html)
+                            text = re.sub(r'\s+', ' ', text).strip()
+                            if text:
+                                text_parts.append(text)
+
+            text = "\n\n".join(text_parts)
+            logger.info(f"[EXTRACT] Extracted {len(text)} chars from EPUB")
+            return text
+
+        except Exception as e:
+            logger.error(f"[EXTRACT] EPUB extraction failed: {e}")
+            raise ValueError(f"Failed to extract text from EPUB: {e}")
+
+    else:
+        # Unknown format - try to decode as text
+        logger.warning(f"[EXTRACT] Unknown file format '{ext}', attempting text decode")
+        for encoding in ["utf-8", "utf-8-sig", "latin-1", "cp1252"]:
+            try:
+                text = file_content.decode(encoding)
+                # Check if it looks like text (not binary garbage)
+                if text.isprintable() or '\n' in text:
+                    logger.info(f"[EXTRACT] Decoded unknown format as text with {encoding}")
+                    return text
+            except UnicodeDecodeError:
+                continue
+
+        raise ValueError(
+            f"Unsupported file format: {ext}. "
+            f"Please upload a TXT, DOCX, PDF, MD, HTML, or EPUB file."
+        )
+
+
 def get_audio_duration(audio_path: Path) -> int:
     """
     Calculate audio duration in seconds using pydub.
@@ -157,20 +328,8 @@ async def process_job(job_id: str):
         logger.info(f"[JOB] {job_id} - Downloading manuscript from: {source_path}")
         manuscript_data = db.download_manuscript(source_path)
 
-        # Try multiple encodings to handle various file formats
-        manuscript_text = None
-        for encoding in ["utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]:
-            try:
-                manuscript_text = manuscript_data.decode(encoding)
-                logger.info(f"[JOB] {job_id} - Decoded manuscript with encoding: {encoding}")
-                break
-            except UnicodeDecodeError:
-                continue
-
-        if manuscript_text is None:
-            # Last resort: decode with errors ignored
-            manuscript_text = manuscript_data.decode("utf-8", errors="ignore")
-            logger.warning(f"[JOB] {job_id} - Decoded manuscript with utf-8 (errors ignored)")
+        # Extract text from file (handles DOCX, PDF, TXT, MD, HTML, EPUB)
+        manuscript_text = extract_text_from_file(manuscript_data, source_path)
 
         word_count = len(manuscript_text.split())
         logger.info(f"[JOB] {job_id} - Manuscript downloaded: {len(manuscript_text)} chars, ~{word_count} words")
