@@ -582,16 +582,51 @@ class GeminiTTS:
             )
 
             # Extract audio data from response
-            # Gemini returns linear16 PCM audio (WAV format) by default
+            # Gemini returns raw PCM audio (linear16, 24kHz, mono)
+            # IMPORTANT: The SDK may return base64-encoded data as string OR bytes
+            # See: https://github.com/googleapis/python-genai/issues/837
+            import base64
+
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
                     if hasattr(part, 'inline_data') and part.inline_data:
                         raw_audio_data = part.inline_data.data
-                        logger.info(f"Generated {len(raw_audio_data)} bytes of raw audio")
+
+                        # Debug: Log data type and first bytes
+                        data_type = type(raw_audio_data).__name__
+                        logger.info(f"[TTS] Raw audio data type: {data_type}")
+                        logger.info(f"[TTS] Raw audio length: {len(raw_audio_data)}")
+
+                        # Handle base64 encoding - SDK behavior varies!
+                        # Sometimes returns str, sometimes bytes that are actually base64 text
+                        if isinstance(raw_audio_data, str):
+                            # Data is base64 encoded string - decode it
+                            logger.info("[TTS] Data is base64 string, decoding...")
+                            raw_audio_data = base64.b64decode(raw_audio_data)
+                            logger.info(f"[TTS] Decoded to {len(raw_audio_data)} bytes")
+                        elif isinstance(raw_audio_data, bytes):
+                            # Check if bytes look like base64 text (common issue!)
+                            # Base64 typically starts with letters/numbers, not binary
+                            first_bytes = raw_audio_data[:20]
+                            try:
+                                # If it decodes as ASCII and looks like base64, decode it
+                                first_str = first_bytes.decode('ascii')
+                                if first_str.replace('+', '').replace('/', '').replace('=', '').isalnum():
+                                    logger.info("[TTS] Bytes appear to be base64 text, decoding...")
+                                    raw_audio_data = base64.b64decode(raw_audio_data)
+                                    logger.info(f"[TTS] Decoded base64 bytes to {len(raw_audio_data)} bytes")
+                            except (UnicodeDecodeError, ValueError):
+                                # Not base64 text, use as-is
+                                pass
+
+                        # Log first 20 bytes for debugging
+                        if len(raw_audio_data) > 20:
+                            header_hex = raw_audio_data[:20].hex()
+                            logger.info(f"[TTS] Audio header (hex): {header_hex}")
 
                         # Convert to requested format (default: MP3 for browser compatibility)
                         converted_audio = self._convert_to_mp3(raw_audio_data, audio_format)
-                        logger.info(f"Converted to {audio_format.upper()}: {len(converted_audio)} bytes")
+                        logger.info(f"[TTS] Converted to {audio_format.upper()}: {len(converted_audio)} bytes")
                         return converted_audio
 
             raise TTSSynthesisError("No audio data in response")
