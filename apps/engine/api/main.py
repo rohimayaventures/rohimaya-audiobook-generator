@@ -1092,10 +1092,18 @@ async def get_voice_library() -> VoiceLibraryResponse:
             for code, name in languages.items()
         ]
 
+        # Input languages include "auto" for auto-detection
+        input_language_list = language_list
+
+        # Output languages should NOT include "auto" - user must choose explicitly
+        output_language_list = [
+            lang for lang in language_list if lang.code != "auto"
+        ]
+
         return VoiceLibraryResponse(
             voice_presets=voice_presets,
-            input_languages=language_list,
-            output_languages=language_list,
+            input_languages=input_language_list,
+            output_languages=output_language_list,
         )
 
     except Exception as e:
@@ -1128,16 +1136,25 @@ async def preview_tts(
     try:
         # Limit text length for preview
         preview_text = request.text[:500]
-        output_lang = request.output_language_code or request.input_language_code
+
+        # Log the request parameters for debugging
+        logger.info(f"[TTS Preview] Request received:")
+        logger.info(f"[TTS Preview]   - preset_id: {request.preset_id}")
+        logger.info(f"[TTS Preview]   - input_language_code: {request.input_language_code}")
+        logger.info(f"[TTS Preview]   - output_language_code: {request.output_language_code}")
+        logger.info(f"[TTS Preview]   - emotion_style_prompt: {request.emotion_style_prompt}")
+        logger.info(f"[TTS Preview]   - text preview: {preview_text[:100]}...")
 
         from tts import synthesize_segment
 
-        # Generate audio
+        # IMPORTANT: Pass output_language_code as-is (None if not specified)
+        # DO NOT fallback to input_language_code here - that breaks translation!
+        # synthesize_segment will handle the fallback logic correctly
         audio_bytes = await synthesize_segment(
             text=preview_text,
             preset_id=request.preset_id,
             input_language_code=request.input_language_code,
-            output_language_code=output_lang,
+            output_language_code=request.output_language_code,  # Pass as-is, no fallback!
             emotion_style_prompt=request.emotion_style_prompt,
         )
 
@@ -1149,14 +1166,17 @@ async def preview_tts(
         word_count = len(preview_text.split())
         duration_estimate = word_count / 150 * 60  # seconds
 
+        # Determine the actual output language for the response
+        actual_output_lang = request.output_language_code or request.input_language_code
         logger.info(f"TTS preview generated for user {user_id}: {len(audio_bytes)} bytes")
+        logger.info(f"[TTS Preview]   - Actual output language: {actual_output_lang}")
 
         return TTSPreviewResponse(
             success=True,
             audio_base64=audio_base64,
             preset_id=request.preset_id,
             input_language=request.input_language_code,
-            output_language=output_lang,
+            output_language=actual_output_lang,
             duration_estimate_seconds=round(duration_estimate, 1),
         )
 

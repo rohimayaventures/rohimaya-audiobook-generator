@@ -2,6 +2,17 @@
 Standard Single-Voice Pipeline
 Full-book audiobook generation with a single narrator voice
 
+⚠️ DEPRECATED: This module uses the OLD Google Cloud TTS or OpenAI TTS.
+   For new development, use: apps/engine/pipelines/gemini_single_voice.py
+
+   The new Gemini pipeline:
+   - Uses Gemini TTS with multilingual support
+   - Integrates translation for audiobooks in any language
+   - Supports 30+ voice presets with emotion control
+   - Is actively maintained
+
+   This file is kept for backwards compatibility (fallback to OpenAI TTS).
+
 Supports multiple TTS providers:
 - Google Cloud TTS (recommended for long books, 5000 char limit)
 - OpenAI TTS (4096 char limit)

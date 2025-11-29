@@ -1,6 +1,17 @@
 """
 Google Cloud Text-to-Speech Provider
 
+⚠️ DEPRECATED: This module uses the OLD Google Cloud TTS API (Neural2/Studio voices).
+   For new development, use the Gemini TTS module at: apps/engine/tts/gemini_tts.py
+
+   The new Gemini TTS module:
+   - Uses GOOGLE_GENAI_API_KEY (not service account)
+   - Supports 30+ voices with emotion/style control
+   - Integrates translation for multilingual audiobooks
+   - Is actively maintained
+
+   This file is kept for backwards compatibility only.
+
 Supports both:
 1. Google Cloud TTS (service account authentication)
 2. Google AI Studio TTS via REST API (API key authentication)

@@ -1,5 +1,11 @@
 """
 OpenAI TTS Provider
+
+⚠️ NOTE: This module is part of the LEGACY TTS system.
+   The primary TTS for AuthorFlow is now Gemini TTS at: apps/engine/tts/gemini_tts.py
+
+   OpenAI TTS is still used as a fallback when Gemini is unavailable.
+   For new development, prefer the new Gemini TTS module.
 """
 
 from src.tts_provider import TTSProvider

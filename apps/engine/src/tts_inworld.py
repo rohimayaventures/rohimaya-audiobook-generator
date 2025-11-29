@@ -1,5 +1,10 @@
 """
 Inworld TTS Provider
+
+⚠️ NOTE: This module is EXPERIMENTAL and part of the legacy TTS system.
+   The primary TTS for AuthorFlow is now Gemini TTS at: apps/engine/tts/gemini_tts.py
+
+   For new development, prefer the new Gemini TTS module.
 """
 from src.tts_provider import TTSProvider
 import requests

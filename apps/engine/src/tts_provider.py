@@ -2,9 +2,20 @@
 TTS Provider Abstraction Layer
 Multi-provider TTS with automatic fallback
 
-Supported providers (in priority order):
-1. Google Cloud TTS (recommended for long books, multilingual support)
-2. OpenAI TTS (fast, good quality)
+⚠️ NOTE: This module is part of the LEGACY TTS system.
+   The primary TTS for AuthorFlow is now Gemini TTS at: apps/engine/tts/gemini_tts.py
+
+   The new Gemini TTS module:
+   - Uses GOOGLE_GENAI_API_KEY (not service account)
+   - Supports 21+ voice presets with emotion/style control
+   - Integrates translation for multilingual audiobooks
+   - Handles audio format conversion automatically
+
+   This abstraction layer is kept for fallback scenarios only.
+
+Legacy supported providers (in priority order):
+1. Google Cloud TTS (deprecated - use Gemini instead)
+2. OpenAI TTS (fallback when Gemini unavailable)
 3. ElevenLabs (premium voices)
 4. Inworld (experimental)
 """

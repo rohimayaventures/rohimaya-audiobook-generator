@@ -837,16 +837,31 @@ async def synthesize_segment(
     # STEP 2: Translate if needed (input language != output language)
     # ========================================================================
     final_text = text
-    final_language = output_language_code or detected_input_language or "en-US"
 
     # Normalize language codes for comparison
+    # IMPORTANT: Compare against output_language_code directly, NOT the fallback value!
     input_base = detected_input_language.split("-")[0].lower() if detected_input_language else "en"
-    output_base = final_language.split("-")[0].lower() if final_language else "en"
+    output_base = output_language_code.split("-")[0].lower() if output_language_code else None
 
-    needs_translation = input_base != output_base
+    # Translation is needed if:
+    # 1. output_language_code is explicitly provided AND
+    # 2. It's different from the input language
+    needs_translation = output_base is not None and input_base != output_base
 
-    if needs_translation and output_language_code:
-        logger.info(f"[TTS] Step 2: Translation required ({input_base} -> {output_base})")
+    # Determine final language for TTS (after potential translation)
+    final_language = output_language_code or detected_input_language or "en-US"
+
+    # Log the decision logic for debugging
+    logger.info(f"[TTS] Step 2: Translation check:")
+    logger.info(f"[TTS]   - input_language_code param: {input_language_code}")
+    logger.info(f"[TTS]   - output_language_code param: {output_language_code}")
+    logger.info(f"[TTS]   - detected_input_language: {detected_input_language}")
+    logger.info(f"[TTS]   - input_base: {input_base}, output_base: {output_base}")
+    logger.info(f"[TTS]   - needs_translation: {needs_translation}")
+    logger.info(f"[TTS]   - final_language (for TTS): {final_language}")
+
+    if needs_translation:
+        logger.info(f"[TTS] Step 2: ✅ Translation WILL happen ({input_base} -> {output_base})")
         logger.info(f"[TTS] Translating with emotion preservation: {emotion_style_prompt or 'natural'}")
 
         # Translate with emotion/style preservation
@@ -865,7 +880,11 @@ async def synthesize_segment(
         # The TTS language code MUST be the output language
         final_language = output_language_code
     else:
-        logger.info(f"[TTS] Step 2: No translation needed (same language: {input_base})")
+        # No translation - either same language or no output_language_code specified
+        if output_language_code:
+            logger.info(f"[TTS] Step 2: No translation needed (same language: {input_base})")
+        else:
+            logger.info(f"[TTS] Step 2: No translation requested (output_language_code not specified)")
 
     # ========================================================================
     # STEP 3: Synthesize with TTS
