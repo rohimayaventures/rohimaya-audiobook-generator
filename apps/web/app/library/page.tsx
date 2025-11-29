@@ -330,8 +330,8 @@ function LibraryContent() {
                     </PrimaryButton>
                   )}
 
-                  {/* Delete button for completed or failed jobs */}
-                  {(job.status === 'completed' || job.status === 'failed') && (
+                  {/* Delete button for completed, failed, or cancelled jobs */}
+                  {(job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
                     <button
                       onClick={() => handleDelete(job.id, job.title)}
                       disabled={deleting === job.id}
