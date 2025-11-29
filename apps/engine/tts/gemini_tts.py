@@ -555,86 +555,110 @@ class GeminiTTS:
         # Determine language
         lang = language_code or preset.default_language_code
 
-        try:
-            # Configure speech generation
-            voice_config = self._types.VoiceConfig(
-                prebuilt_voice_config=self._types.PrebuiltVoiceConfig(
-                    voice_name=preset.voice_name
+        # Retry configuration for rate limits
+        max_retries = 5
+        base_delay = 2.0  # Start with 2 seconds
+
+        for attempt in range(max_retries):
+            try:
+                # Configure speech generation
+                voice_config = self._types.VoiceConfig(
+                    prebuilt_voice_config=self._types.PrebuiltVoiceConfig(
+                        voice_name=preset.voice_name
+                    )
                 )
-            )
 
-            speech_config = self._types.SpeechConfig(
-                voice_config=voice_config,
-            )
-
-            # Generate speech using Gemini
-            # Run in thread pool since the client may be synchronous
-            response = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._client.models.generate_content(
-                    model=self.config["model"],
-                    contents=speech_prompt,
-                    config=self._types.GenerateContentConfig(
-                        response_modalities=["AUDIO"],
-                        speech_config=speech_config,
-                    ),
+                speech_config = self._types.SpeechConfig(
+                    voice_config=voice_config,
                 )
-            )
 
-            # Extract audio data from response
-            # Gemini returns raw PCM audio (linear16, 24kHz, mono)
-            # IMPORTANT: The SDK may return base64-encoded data as string OR bytes
-            # See: https://github.com/googleapis/python-genai/issues/837
-            import base64
+                # Generate speech using Gemini
+                # Run in thread pool since the client may be synchronous
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self._client.models.generate_content(
+                        model=self.config["model"],
+                        contents=speech_prompt,
+                        config=self._types.GenerateContentConfig(
+                            response_modalities=["AUDIO"],
+                            speech_config=speech_config,
+                        ),
+                    )
+                )
 
-            if response.candidates and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        raw_audio_data = part.inline_data.data
+                # Extract audio data from response
+                # Gemini returns raw PCM audio (linear16, 24kHz, mono)
+                # IMPORTANT: The SDK may return base64-encoded data as string OR bytes
+                # See: https://github.com/googleapis/python-genai/issues/837
+                import base64
 
-                        # Debug: Log data type and first bytes
-                        data_type = type(raw_audio_data).__name__
-                        logger.info(f"[TTS] Raw audio data type: {data_type}")
-                        logger.info(f"[TTS] Raw audio length: {len(raw_audio_data)}")
+                if response.candidates and response.candidates[0].content.parts:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, 'inline_data') and part.inline_data:
+                            raw_audio_data = part.inline_data.data
 
-                        # Handle base64 encoding - SDK behavior varies!
-                        # Sometimes returns str, sometimes bytes that are actually base64 text
-                        if isinstance(raw_audio_data, str):
-                            # Data is base64 encoded string - decode it
-                            logger.info("[TTS] Data is base64 string, decoding...")
-                            raw_audio_data = base64.b64decode(raw_audio_data)
-                            logger.info(f"[TTS] Decoded to {len(raw_audio_data)} bytes")
-                        elif isinstance(raw_audio_data, bytes):
-                            # Check if bytes look like base64 text (common issue!)
-                            # Base64 typically starts with letters/numbers, not binary
-                            first_bytes = raw_audio_data[:20]
-                            try:
-                                # If it decodes as ASCII and looks like base64, decode it
-                                first_str = first_bytes.decode('ascii')
-                                if first_str.replace('+', '').replace('/', '').replace('=', '').isalnum():
-                                    logger.info("[TTS] Bytes appear to be base64 text, decoding...")
-                                    raw_audio_data = base64.b64decode(raw_audio_data)
-                                    logger.info(f"[TTS] Decoded base64 bytes to {len(raw_audio_data)} bytes")
-                            except (UnicodeDecodeError, ValueError):
-                                # Not base64 text, use as-is
-                                pass
+                            # Debug: Log data type and first bytes
+                            data_type = type(raw_audio_data).__name__
+                            logger.info(f"[TTS] Raw audio data type: {data_type}")
+                            logger.info(f"[TTS] Raw audio length: {len(raw_audio_data)}")
 
-                        # Log first 20 bytes for debugging
-                        if len(raw_audio_data) > 20:
-                            header_hex = raw_audio_data[:20].hex()
-                            logger.info(f"[TTS] Audio header (hex): {header_hex}")
+                            # Handle base64 encoding - SDK behavior varies!
+                            # Sometimes returns str, sometimes bytes that are actually base64 text
+                            if isinstance(raw_audio_data, str):
+                                # Data is base64 encoded string - decode it
+                                logger.info("[TTS] Data is base64 string, decoding...")
+                                raw_audio_data = base64.b64decode(raw_audio_data)
+                                logger.info(f"[TTS] Decoded to {len(raw_audio_data)} bytes")
+                            elif isinstance(raw_audio_data, bytes):
+                                # Check if bytes look like base64 text (common issue!)
+                                # Base64 typically starts with letters/numbers, not binary
+                                first_bytes = raw_audio_data[:20]
+                                try:
+                                    # If it decodes as ASCII and looks like base64, decode it
+                                    first_str = first_bytes.decode('ascii')
+                                    if first_str.replace('+', '').replace('/', '').replace('=', '').isalnum():
+                                        logger.info("[TTS] Bytes appear to be base64 text, decoding...")
+                                        raw_audio_data = base64.b64decode(raw_audio_data)
+                                        logger.info(f"[TTS] Decoded base64 bytes to {len(raw_audio_data)} bytes")
+                                except (UnicodeDecodeError, ValueError):
+                                    # Not base64 text, use as-is
+                                    pass
 
-                        # Convert to requested format (default: MP3 for browser compatibility)
-                        converted_audio = self._convert_to_mp3(raw_audio_data, audio_format)
-                        logger.info(f"[TTS] Converted to {audio_format.upper()}: {len(converted_audio)} bytes")
-                        return converted_audio
+                            # Log first 20 bytes for debugging
+                            if len(raw_audio_data) > 20:
+                                header_hex = raw_audio_data[:20].hex()
+                                logger.info(f"[TTS] Audio header (hex): {header_hex}")
 
-            raise TTSSynthesisError("No audio data in response")
+                            # Convert to requested format (default: MP3 for browser compatibility)
+                            converted_audio = self._convert_to_mp3(raw_audio_data, audio_format)
+                            logger.info(f"[TTS] Converted to {audio_format.upper()}: {len(converted_audio)} bytes")
+                            return converted_audio
 
-        except Exception as e:
-            error_msg = f"TTS synthesis failed: {str(e)}"
-            logger.error(error_msg)
-            raise TTSSynthesisError(error_msg) from e
+                raise TTSSynthesisError("No audio data in response")
+
+            except Exception as e:
+                error_str = str(e)
+                # Check if it's a rate limit error (429)
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    if attempt < max_retries - 1:
+                        # Extract retry delay from error if available
+                        import re
+                        delay_match = re.search(r'retry in (\d+\.?\d*)s', error_str.lower())
+                        if delay_match:
+                            delay = float(delay_match.group(1)) + 1.0  # Add 1s buffer
+                        else:
+                            delay = base_delay * (2 ** attempt)  # Exponential backoff
+
+                        logger.warning(f"[TTS] Rate limited (attempt {attempt + 1}/{max_retries}), waiting {delay:.1f}s...")
+                        await asyncio.sleep(delay)
+                        continue
+                # Not a rate limit error, or we've exhausted retries
+                error_msg = f"TTS synthesis failed: {str(e)}"
+                logger.error(error_msg)
+                raise TTSSynthesisError(error_msg) from e
+
+        # Should never reach here, but just in case
+        raise TTSSynthesisError("TTS synthesis failed after all retries")
 
     def _convert_to_mp3(self, raw_audio: bytes, output_format: str = "mp3") -> bytes:
         """

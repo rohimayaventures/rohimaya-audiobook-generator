@@ -202,7 +202,10 @@ async def process_job(job_id: str):
 
             # Get language settings from job (with defaults for backwards compatibility)
             input_language = job.get("input_language_code", "en-US")
-            output_language = job.get("output_language_code") or input_language
+            # IMPORTANT: Do NOT fallback output_language to input_language here!
+            # If output_language_code is None, it means "same as input" - the TTS module
+            # needs to see None to know translation wasn't requested.
+            output_language = job.get("output_language_code")  # Can be None
             voice_preset_id = job.get("voice_preset_id") or job.get("narrator_voice_id", "studio_neutral")
             emotion_style = job.get("emotion_style_prompt")
             audio_format = job.get("audio_format", "mp3")

@@ -61,7 +61,9 @@ class GeminiSingleVoicePipeline:
         """
         self.voice_preset_id = voice_preset_id
         self.input_language_code = input_language_code
-        self.output_language_code = output_language_code or input_language_code
+        # IMPORTANT: Do NOT fallback to input_language_code here!
+        # synthesize_segment needs to see None to know translation wasn't requested.
+        self.output_language_code = output_language_code  # Can be None
         self.emotion_style_prompt = emotion_style_prompt
         self.audio_format = audio_format.lower()
         self.max_words = max_words_per_chunk
