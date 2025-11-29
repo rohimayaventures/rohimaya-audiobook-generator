@@ -208,11 +208,92 @@ CREATE TRIGGER trigger_estimate_chapter_duration
 
 
 -- ============================================================================
+-- TABLE: retail_samples
+-- Purpose: Track auto-suggested and user-confirmed retail sample selections
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS retail_samples (
+    -- Primary Key
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Foreign Key to jobs table
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+
+    -- Source Information
+    source_chapter_id UUID REFERENCES chapters(id) ON DELETE SET NULL,
+    source_chapter_title TEXT,
+    source_start_char INTEGER,  -- Character position in source chapter text
+    source_end_char INTEGER,
+
+    -- Sample Content
+    sample_text TEXT NOT NULL,
+    word_count INTEGER DEFAULT 0,
+    character_count INTEGER DEFAULT 0,
+    estimated_duration_seconds INTEGER DEFAULT 0,
+
+    -- AI Scoring (from Gemini analysis)
+    engagement_score NUMERIC(3,2),      -- 0.00 to 1.00
+    emotional_intensity_score NUMERIC(3,2),
+    spoiler_risk_score NUMERIC(3,2),    -- 0.00 = no spoilers, 1.00 = major spoilers
+    overall_score NUMERIC(3,2),
+
+    -- Selection Status
+    is_auto_suggested BOOLEAN DEFAULT TRUE,
+    is_user_confirmed BOOLEAN DEFAULT FALSE,
+    is_final BOOLEAN DEFAULT FALSE,     -- True when audio has been generated
+
+    -- Audio Output (once generated)
+    audio_path TEXT,
+    audio_duration_seconds INTEGER,
+    audio_file_size_bytes BIGINT,
+
+    -- Timestamps
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    confirmed_at TIMESTAMPTZ,
+    generated_at TIMESTAMPTZ
+);
+
+-- Only one final retail sample per job
+CREATE UNIQUE INDEX idx_retail_samples_job_final ON retail_samples(job_id) WHERE is_final = TRUE;
+
+-- Indexes
+CREATE INDEX idx_retail_samples_job_id ON retail_samples(job_id);
+CREATE INDEX idx_retail_samples_confirmed ON retail_samples(job_id, is_user_confirmed);
+
+COMMENT ON TABLE retail_samples IS 'Retail sample candidates and selections for audiobook distribution';
+COMMENT ON COLUMN retail_samples.engagement_score IS 'AI-rated engagement level (0-1)';
+COMMENT ON COLUMN retail_samples.spoiler_risk_score IS 'AI-rated spoiler risk (0=safe, 1=major spoilers)';
+
+
+-- ============================================================================
+-- Add Findaway export filename column to tracks
+-- ============================================================================
+
+ALTER TABLE tracks ADD COLUMN IF NOT EXISTS export_filename TEXT;
+
+COMMENT ON COLUMN tracks.export_filename IS 'Findaway-style filename (e.g., 10_chapter_01.mp3)';
+
+
+-- ============================================================================
+-- Add retail sample and credits configuration to jobs
+-- ============================================================================
+
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS opening_credits_text TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS closing_credits_text TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS retail_sample_confirmed BOOLEAN DEFAULT FALSE;
+
+COMMENT ON COLUMN jobs.opening_credits_text IS 'Text for opening credits (e.g., "Book title by Author, narrated by...")';
+COMMENT ON COLUMN jobs.closing_credits_text IS 'Text for closing credits (e.g., "The end. Thank you for listening...")';
+COMMENT ON COLUMN jobs.retail_sample_confirmed IS 'Whether user has confirmed the retail sample selection';
+
+
+-- ============================================================================
 -- ROW LEVEL SECURITY
 -- ============================================================================
 
 ALTER TABLE chapters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tracks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE retail_samples ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can only see chapters/tracks for their own jobs
 CREATE POLICY chapters_user_policy ON chapters
@@ -222,6 +303,12 @@ CREATE POLICY chapters_user_policy ON chapters
     );
 
 CREATE POLICY tracks_user_policy ON tracks
+    FOR ALL
+    USING (
+        job_id IN (SELECT id FROM jobs WHERE user_id = auth.uid())
+    );
+
+CREATE POLICY retail_samples_user_policy ON retail_samples
     FOR ALL
     USING (
         job_id IN (SELECT id FROM jobs WHERE user_id = auth.uid())

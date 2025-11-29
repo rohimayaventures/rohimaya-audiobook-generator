@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
+import { ChapterReview } from '@/components/chapters'
 import { getCurrentUser } from '@/lib/supabaseClient'
 import { getJob, getJobDownloadUrl, cancelJob, retryJob, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
@@ -86,9 +87,9 @@ function JobDetailContent() {
 
     fetchData()
 
-    // Poll for updates if job is processing
+    // Poll for updates if job is in a processing state
     const interval = setInterval(async () => {
-      if (job?.status === 'processing' || job?.status === 'pending') {
+      if (job?.status === 'processing' || job?.status === 'pending' || job?.status === 'parsing' || job?.status === 'chapters_approved') {
         try {
           const jobData = await getJob(jobId)
           setJob(jobData)
@@ -161,9 +162,16 @@ function JobDetailContent() {
       case 'completed':
         return 'bg-green-500/20 text-green-400 border-green-500/30'
       case 'processing':
+      case 'parsing':
         return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      case 'chapters_pending':
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+      case 'chapters_approved':
+        return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
       case 'failed':
         return 'bg-red-500/20 text-red-400 border-red-500/30'
+      case 'cancelled':
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
       default:
         return 'bg-white/10 text-white/60 border-white/10'
     }
@@ -175,11 +183,32 @@ function JobDetailContent() {
       case 'completed':
         return '✓'
       case 'processing':
+      case 'parsing':
         return '⏳'
+      case 'chapters_pending':
+        return '📋'
+      case 'chapters_approved':
+        return '✅'
       case 'failed':
         return '✗'
+      case 'cancelled':
+        return '⊘'
       default:
         return '○'
+    }
+  }
+
+  // Status text
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'chapters_pending':
+        return 'Review Chapters'
+      case 'chapters_approved':
+        return 'Approved - Processing'
+      case 'parsing':
+        return 'Parsing Manuscript'
+      default:
+        return status
     }
   }
 
@@ -233,13 +262,21 @@ function JobDetailContent() {
                   )}`}
                 >
                   <span>{getStatusIcon(job.status)}</span>
-                  <span className="font-medium capitalize">{job.status}</span>
+                  <span className="font-medium capitalize">{getStatusText(job.status)}</span>
                 </div>
               </div>
             </GlassCard>
 
+            {/* Chapter Review - Show when chapters are ready for review */}
+            {job.status === 'chapters_pending' && (
+              <ChapterReview
+                job={job}
+                onApproved={(updatedJob) => setJob(updatedJob)}
+              />
+            )}
+
             {/* Progress / Status */}
-            {(job.status === 'processing' || job.status === 'pending') && (
+            {(job.status === 'processing' || job.status === 'pending' || job.status === 'parsing' || job.status === 'chapters_approved') && (
               <GlassCard>
                 <h2 className="text-lg font-semibold text-white mb-4">Progress</h2>
 

@@ -964,6 +964,668 @@ async def delete_job(
 
 
 # ============================================================================
+# CHAPTER MANAGEMENT ENDPOINTS
+# ============================================================================
+
+class ChapterResponse(BaseModel):
+    """Chapter details response"""
+    id: str
+    job_id: str
+    chapter_index: int
+    source_order: int
+    title: str
+    text_content: Optional[str] = None
+    character_count: int = 0
+    word_count: int = 0
+    estimated_duration_seconds: int = 0
+    status: str = "pending_review"
+    segment_type: str = "body_chapter"
+    audio_path: Optional[str] = None
+    audio_duration_seconds: Optional[int] = None
+    error_message: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class ChapterUpdateRequest(BaseModel):
+    """Request to update a chapter"""
+    title: Optional[str] = None
+    status: Optional[str] = None
+    segment_type: Optional[str] = None
+
+
+class ChapterReorderRequest(BaseModel):
+    """Request to reorder chapters"""
+    new_order: List[int]  # List of source_order values in new order
+
+
+class ApproveChaptersRequest(BaseModel):
+    """Request to approve chapters for TTS processing"""
+    chapter_ids: Optional[List[str]] = None  # If None, approve all
+
+
+@app.get(
+    "/jobs/{job_id}/chapters",
+    response_model=List[ChapterResponse],
+    summary="Get Job Chapters",
+    tags=["Chapters"],
+)
+async def get_job_chapters(
+    job_id: str,
+    user_id: str = Depends(get_current_user),
+) -> List[ChapterResponse]:
+    """
+    Get all chapters for a job, ordered by chapter_index.
+
+    Chapters are available after manuscript parsing (status: chapters_pending).
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this job"
+        )
+
+    # Get chapters from database
+    try:
+        chapters = db.client.table("chapters").select("*").eq(
+            "job_id", job_id
+        ).order("chapter_index").execute()
+
+        return [ChapterResponse(**ch) for ch in (chapters.data or [])]
+    except Exception as e:
+        logger.error(f"Failed to get chapters for job {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get chapters: {str(e)}"
+        )
+
+
+@app.get(
+    "/jobs/{job_id}/chapters/{chapter_id}",
+    response_model=ChapterResponse,
+    summary="Get Chapter Details",
+    tags=["Chapters"],
+)
+async def get_chapter(
+    job_id: str,
+    chapter_id: str,
+    user_id: str = Depends(get_current_user),
+) -> ChapterResponse:
+    """Get details for a specific chapter."""
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this job"
+        )
+
+    try:
+        result = db.client.table("chapters").select("*").eq(
+            "id", chapter_id
+        ).eq("job_id", job_id).single().execute()
+
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Chapter {chapter_id} not found"
+            )
+
+        return ChapterResponse(**result.data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get chapter {chapter_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get chapter: {str(e)}"
+        )
+
+
+@app.patch(
+    "/jobs/{job_id}/chapters/{chapter_id}",
+    response_model=ChapterResponse,
+    summary="Update Chapter",
+    tags=["Chapters"],
+)
+async def update_chapter(
+    job_id: str,
+    chapter_id: str,
+    request: ChapterUpdateRequest,
+    user_id: str = Depends(get_current_user),
+) -> ChapterResponse:
+    """
+    Update a chapter's title, status, or segment type.
+
+    Valid statuses: pending_review, approved, excluded
+    Valid segment types: front_matter, body_chapter, back_matter
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this job"
+        )
+
+    # Validate status
+    if request.status and request.status not in [
+        "pending_review", "approved", "excluded"
+    ]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid status. Must be: pending_review, approved, or excluded"
+        )
+
+    # Validate segment_type
+    if request.segment_type and request.segment_type not in [
+        "front_matter", "body_chapter", "back_matter"
+    ]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid segment_type. Must be: front_matter, body_chapter, or back_matter"
+        )
+
+    # Build update
+    updates = {}
+    if request.title is not None:
+        updates["title"] = request.title
+    if request.status is not None:
+        updates["status"] = request.status
+        if request.status == "approved":
+            updates["approved_at"] = datetime.utcnow().isoformat()
+    if request.segment_type is not None:
+        updates["segment_type"] = request.segment_type
+
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid updates provided"
+        )
+
+    try:
+        result = db.client.table("chapters").update(updates).eq(
+            "id", chapter_id
+        ).eq("job_id", job_id).execute()
+
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Chapter {chapter_id} not found"
+            )
+
+        return ChapterResponse(**result.data[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update chapter {chapter_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update chapter: {str(e)}"
+        )
+
+
+@app.post(
+    "/jobs/{job_id}/chapters/reorder",
+    response_model=List[ChapterResponse],
+    summary="Reorder Chapters",
+    tags=["Chapters"],
+)
+async def reorder_chapters(
+    job_id: str,
+    request: ChapterReorderRequest,
+    user_id: str = Depends(get_current_user),
+) -> List[ChapterResponse]:
+    """
+    Reorder chapters by providing the new order of source_order values.
+
+    Example: If you have 3 chapters with source_order [0, 1, 2] and you want
+    to move chapter 2 to the front, send new_order: [2, 0, 1]
+
+    This updates the chapter_index for each chapter to match the new order.
+    The source_order (original manuscript position) is preserved.
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this job"
+        )
+
+    # Only allow reordering in chapters_pending status
+    if job["status"] not in ["chapters_pending", "failed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot reorder chapters when job status is '{job['status']}'. "
+                   f"Job must be in 'chapters_pending' status."
+        )
+
+    try:
+        # Get current chapters
+        chapters_result = db.client.table("chapters").select("*").eq(
+            "job_id", job_id
+        ).execute()
+        chapters = chapters_result.data or []
+
+        if not chapters:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No chapters found for this job"
+            )
+
+        # Validate new_order contains all source_order values
+        current_source_orders = {ch["source_order"] for ch in chapters}
+        new_order_set = set(request.new_order)
+
+        if current_source_orders != new_order_set:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"new_order must contain exactly these source_order values: {sorted(current_source_orders)}"
+            )
+
+        # Update chapter_index for each chapter
+        updated_chapters = []
+        for new_idx, source_order in enumerate(request.new_order):
+            # Find the chapter with this source_order
+            chapter = next(ch for ch in chapters if ch["source_order"] == source_order)
+
+            # Update chapter_index
+            result = db.client.table("chapters").update({
+                "chapter_index": new_idx
+            }).eq("id", chapter["id"]).execute()
+
+            if result.data:
+                updated_chapters.append(result.data[0])
+
+        # Return updated chapters in new order
+        updated_chapters.sort(key=lambda x: x["chapter_index"])
+        return [ChapterResponse(**ch) for ch in updated_chapters]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to reorder chapters for job {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reorder chapters: {str(e)}"
+        )
+
+
+@app.post(
+    "/jobs/{job_id}/chapters/approve",
+    response_model=JobResponse,
+    summary="Approve Chapters for TTS",
+    tags=["Chapters"],
+)
+async def approve_chapters(
+    job_id: str,
+    request: Optional[ApproveChaptersRequest] = None,
+    user_id: str = Depends(get_current_user),
+) -> JobResponse:
+    """
+    Approve chapters and start TTS processing.
+
+    If chapter_ids is provided, only those chapters are approved.
+    If chapter_ids is None/empty, all non-excluded chapters are approved.
+
+    This transitions the job from 'chapters_pending' to 'processing'.
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this job"
+        )
+
+    # Only allow approving in chapters_pending status
+    if job["status"] != "chapters_pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot approve chapters when job status is '{job['status']}'. "
+                   f"Job must be in 'chapters_pending' status."
+        )
+
+    try:
+        approved_at = datetime.utcnow().isoformat()
+
+        if request and request.chapter_ids:
+            # Approve specific chapters
+            for chapter_id in request.chapter_ids:
+                db.client.table("chapters").update({
+                    "status": "approved",
+                    "approved_at": approved_at,
+                }).eq("id", chapter_id).eq("job_id", job_id).execute()
+        else:
+            # Approve all non-excluded chapters
+            db.client.table("chapters").update({
+                "status": "approved",
+                "approved_at": approved_at,
+            }).eq("job_id", job_id).neq("status", "excluded").execute()
+
+        # Update job status to chapters_approved
+        updated_job = db.update_job(job_id, {
+            "status": "chapters_approved",
+            "chapters_approved_at": approved_at,
+        })
+
+        # Enqueue job for TTS processing
+        await enqueue_job(job_id)
+
+        logger.info(f"[JOB] {job_id} - Chapters approved, queued for TTS processing")
+
+        return JobResponse(**updated_job)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to approve chapters for job {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to approve chapters: {str(e)}"
+        )
+
+
+# ============================================================================
+# RETAIL SAMPLE ENDPOINTS
+# ============================================================================
+
+class RetailSampleResponse(BaseModel):
+    """Retail sample response"""
+    id: str
+    job_id: str
+    source_chapter_id: Optional[str] = None
+    source_chapter_title: Optional[str] = None
+    sample_text: str
+    word_count: int = 0
+    character_count: int = 0
+    estimated_duration_seconds: int = 0
+    engagement_score: Optional[float] = None
+    emotional_intensity_score: Optional[float] = None
+    spoiler_risk_score: Optional[float] = None
+    overall_score: Optional[float] = None
+    is_auto_suggested: bool = True
+    is_user_confirmed: bool = False
+    is_final: bool = False
+    audio_path: Optional[str] = None
+    created_at: str
+
+
+class RetailSampleConfirmRequest(BaseModel):
+    """Request to confirm/select a retail sample"""
+    sample_id: str
+
+
+@app.get(
+    "/jobs/{job_id}/retail-samples",
+    response_model=List[RetailSampleResponse],
+    summary="Get Retail Sample Candidates",
+    tags=["Retail Samples"],
+)
+async def get_retail_samples(
+    job_id: str,
+    user_id: str = Depends(get_current_user),
+) -> List[RetailSampleResponse]:
+    """
+    Get retail sample candidates for a job.
+
+    Returns AI-suggested samples ordered by overall_score (best first).
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this job"
+        )
+
+    try:
+        result = db.client.table("retail_samples").select("*").eq(
+            "job_id", job_id
+        ).order("overall_score", desc=True).execute()
+
+        return [RetailSampleResponse(**s) for s in (result.data or [])]
+    except Exception as e:
+        logger.error(f"Failed to get retail samples for job {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get retail samples: {str(e)}"
+        )
+
+
+@app.post(
+    "/jobs/{job_id}/retail-samples/confirm",
+    response_model=RetailSampleResponse,
+    summary="Confirm Retail Sample Selection",
+    tags=["Retail Samples"],
+)
+async def confirm_retail_sample(
+    job_id: str,
+    request: RetailSampleConfirmRequest,
+    user_id: str = Depends(get_current_user),
+) -> RetailSampleResponse:
+    """
+    Confirm a retail sample selection.
+
+    This marks the selected sample as user_confirmed and is_final.
+    Only one sample can be final per job.
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this job"
+        )
+
+    try:
+        # First, unset is_final on any existing final samples
+        db.client.table("retail_samples").update({
+            "is_final": False
+        }).eq("job_id", job_id).eq("is_final", True).execute()
+
+        # Set the selected sample as confirmed and final
+        result = db.client.table("retail_samples").update({
+            "is_user_confirmed": True,
+            "is_final": True,
+            "confirmed_at": datetime.utcnow().isoformat(),
+        }).eq("id", request.sample_id).eq("job_id", job_id).execute()
+
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Retail sample {request.sample_id} not found"
+            )
+
+        # Update job to indicate retail sample is confirmed
+        db.update_job(job_id, {"retail_sample_confirmed": True})
+
+        return RetailSampleResponse(**result.data[0])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to confirm retail sample: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to confirm retail sample: {str(e)}"
+        )
+
+
+# ============================================================================
+# TRACKS/DOWNLOADS ENDPOINTS
+# ============================================================================
+
+class TrackResponse(BaseModel):
+    """Audio track response"""
+    id: str
+    job_id: str
+    chapter_id: Optional[str] = None
+    track_index: int
+    title: str
+    segment_type: str
+    audio_path: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    file_size_bytes: Optional[int] = None
+    export_filename: Optional[str] = None
+    status: str = "pending"
+    created_at: str
+
+
+class TrackDownloadUrlResponse(BaseModel):
+    """Track download URL response"""
+    track_id: str
+    export_filename: str
+    download_url: str
+    expires_in: int = 3600
+
+
+@app.get(
+    "/jobs/{job_id}/tracks",
+    response_model=List[TrackResponse],
+    summary="Get Job Tracks",
+    tags=["Tracks"],
+)
+async def get_job_tracks(
+    job_id: str,
+    user_id: str = Depends(get_current_user),
+) -> List[TrackResponse]:
+    """
+    Get all audio tracks for a completed job.
+
+    Tracks are in playback order with Findaway-compatible filenames.
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this job"
+        )
+
+    try:
+        result = db.client.table("tracks").select("*").eq(
+            "job_id", job_id
+        ).order("track_index").execute()
+
+        return [TrackResponse(**t) for t in (result.data or [])]
+    except Exception as e:
+        logger.error(f"Failed to get tracks for job {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get tracks: {str(e)}"
+        )
+
+
+@app.get(
+    "/jobs/{job_id}/tracks/{track_id}/download",
+    response_model=TrackDownloadUrlResponse,
+    summary="Get Track Download URL",
+    tags=["Tracks"],
+)
+async def get_track_download_url(
+    job_id: str,
+    track_id: str,
+    user_id: str = Depends(get_current_user),
+) -> TrackDownloadUrlResponse:
+    """
+    Get presigned download URL for a specific track.
+
+    The URL expires in 1 hour.
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this job"
+        )
+
+    try:
+        result = db.client.table("tracks").select("*").eq(
+            "id", track_id
+        ).eq("job_id", job_id).single().execute()
+
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Track {track_id} not found"
+            )
+
+        track = result.data
+        if not track.get("audio_path"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Track audio not available yet"
+            )
+
+        download_url = db.get_download_url(track["audio_path"], expires_in=3600)
+
+        return TrackDownloadUrlResponse(
+            track_id=track_id,
+            export_filename=track.get("export_filename") or f"track_{track['track_index']:02d}.mp3",
+            download_url=download_url,
+            expires_in=3600,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get track download URL: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get download URL: {str(e)}"
+        )
+
+
+# ============================================================================
 # VOICE MANAGEMENT ENDPOINTS
 # ============================================================================
 

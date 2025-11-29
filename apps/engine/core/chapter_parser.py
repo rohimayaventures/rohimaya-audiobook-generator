@@ -422,3 +422,214 @@ def get_segment_type_order(segment_type: str) -> int:
         "retail_sample": 5,
     }
     return order_map.get(segment_type, 2)
+
+
+# ============================================================================
+# FINDAWAY FILE NAMING
+# ============================================================================
+# File naming convention for Findaway distribution:
+#   00_opening_credits.mp3      - Opening credits
+#   01_front_matter_01.mp3      - Dedication, foreword, etc. (01-09 reserved)
+#   10_chapter_01.mp3           - Body chapters start at 10
+#   10_chapter_02.mp3, etc.
+#   80_back_matter_01.mp3       - Epilogue, afterword, etc. (80-89 reserved)
+#   98_closing_credits.mp3      - Closing credits
+#   99_retail_sample.mp3        - Retail sample
+# ============================================================================
+
+FINDAWAY_PREFIXES = {
+    "opening_credits": "00",
+    "front_matter": "01",  # Can increment: 01, 02, ..., 09
+    "body_chapter": "10",  # Starts at 10, increments: 10, 11, 12, ...
+    "back_matter": "80",   # Can increment: 80, 81, ..., 89
+    "closing_credits": "98",
+    "retail_sample": "99",
+}
+
+
+def generate_findaway_filename(
+    segment_type: str,
+    index_within_type: int,
+    title: str,
+    extension: str = "mp3"
+) -> str:
+    """
+    Generate a Findaway-compatible filename for an audio track.
+
+    Args:
+        segment_type: One of opening_credits, front_matter, body_chapter,
+                      back_matter, closing_credits, retail_sample
+        index_within_type: 0-based index within this segment type
+                           (e.g., chapter 0, chapter 1, etc.)
+        title: Chapter/section title for the filename
+        extension: File extension (default "mp3")
+
+    Returns:
+        Findaway-style filename like "10_chapter_01.mp3"
+
+    Examples:
+        generate_findaway_filename("opening_credits", 0, "Opening Credits")
+        -> "00_opening_credits.mp3"
+
+        generate_findaway_filename("front_matter", 0, "Dedication")
+        -> "01_dedication.mp3"
+
+        generate_findaway_filename("body_chapter", 0, "Chapter 1: The Beginning")
+        -> "10_chapter_01.mp3"
+
+        generate_findaway_filename("body_chapter", 14, "Chapter 15")
+        -> "24_chapter_15.mp3"
+
+        generate_findaway_filename("closing_credits", 0, "Closing Credits")
+        -> "98_closing_credits.mp3"
+    """
+    # Get base prefix for segment type
+    base_prefix = FINDAWAY_PREFIXES.get(segment_type, "50")
+
+    # Calculate actual prefix number based on index
+    if segment_type == "opening_credits":
+        prefix = "00"
+    elif segment_type == "front_matter":
+        # Front matter: 01-09
+        prefix = f"{1 + index_within_type:02d}"
+        if int(prefix) > 9:
+            prefix = "09"  # Cap at 09
+    elif segment_type == "body_chapter":
+        # Body chapters: 10-79
+        prefix = f"{10 + index_within_type:02d}"
+        if int(prefix) > 79:
+            prefix = "79"  # Cap at 79
+    elif segment_type == "back_matter":
+        # Back matter: 80-89
+        prefix = f"{80 + index_within_type:02d}"
+        if int(prefix) > 89:
+            prefix = "89"  # Cap at 89
+    elif segment_type == "closing_credits":
+        prefix = "98"
+    elif segment_type == "retail_sample":
+        prefix = "99"
+    else:
+        prefix = f"{50 + index_within_type:02d}"
+
+    # Generate safe filename from title
+    safe_title = sanitize_title_for_filename(title.lower(), max_length=40)
+
+    # For body chapters, use consistent naming
+    if segment_type == "body_chapter":
+        safe_title = f"chapter_{index_within_type + 1:02d}"
+
+    return f"{prefix}_{safe_title}.{extension}"
+
+
+def generate_track_list_from_chapters(
+    chapters: List[Dict],
+    include_credits: bool = True,
+    include_retail_sample: bool = True,
+    opening_credits_text: Optional[str] = None,
+    closing_credits_text: Optional[str] = None,
+    retail_sample_text: Optional[str] = None,
+) -> List[Dict]:
+    """
+    Generate a complete track list with Findaway filenames from chapters.
+
+    Args:
+        chapters: List of chapter dicts from split_into_chapters()
+        include_credits: Whether to include opening/closing credits tracks
+        include_retail_sample: Whether to include retail sample track
+        opening_credits_text: Text for opening credits (optional)
+        closing_credits_text: Text for closing credits (optional)
+        retail_sample_text: Text for retail sample (optional)
+
+    Returns:
+        List of track dicts with:
+        {
+            "track_index": int,       # 0-based playback order
+            "segment_type": str,
+            "title": str,
+            "export_filename": str,   # Findaway filename
+            "source_chapter_id": str or None,  # For linking back
+            "text": str or None,
+        }
+    """
+    tracks = []
+    track_index = 0
+
+    # Counters for each segment type
+    front_matter_count = 0
+    body_chapter_count = 0
+    back_matter_count = 0
+
+    # 1. Opening credits
+    if include_credits:
+        tracks.append({
+            "track_index": track_index,
+            "segment_type": "opening_credits",
+            "title": "Opening Credits",
+            "export_filename": generate_findaway_filename("opening_credits", 0, "Opening Credits"),
+            "source_chapter_id": None,
+            "text": opening_credits_text,
+        })
+        track_index += 1
+
+    # Sort chapters by segment type order, then by chapter_index
+    sorted_chapters = sorted(
+        chapters,
+        key=lambda c: (get_segment_type_order(c.get("segment_type", "body_chapter")), c.get("chapter_index", 0))
+    )
+
+    # 2. Process chapters by segment type
+    for chapter in sorted_chapters:
+        seg_type = chapter.get("segment_type", "body_chapter")
+        title = chapter.get("title", "Untitled")
+
+        if seg_type == "front_matter":
+            export_filename = generate_findaway_filename("front_matter", front_matter_count, title)
+            front_matter_count += 1
+        elif seg_type == "body_chapter":
+            export_filename = generate_findaway_filename("body_chapter", body_chapter_count, title)
+            body_chapter_count += 1
+        elif seg_type == "back_matter":
+            export_filename = generate_findaway_filename("back_matter", back_matter_count, title)
+            back_matter_count += 1
+        else:
+            # Default to body chapter
+            export_filename = generate_findaway_filename("body_chapter", body_chapter_count, title)
+            body_chapter_count += 1
+
+        tracks.append({
+            "track_index": track_index,
+            "segment_type": seg_type,
+            "title": title,
+            "export_filename": export_filename,
+            "source_chapter_id": chapter.get("id"),
+            "text": chapter.get("text"),
+            "word_count": chapter.get("word_count", 0),
+        })
+        track_index += 1
+
+    # 3. Closing credits
+    if include_credits:
+        tracks.append({
+            "track_index": track_index,
+            "segment_type": "closing_credits",
+            "title": "Closing Credits",
+            "export_filename": generate_findaway_filename("closing_credits", 0, "Closing Credits"),
+            "source_chapter_id": None,
+            "text": closing_credits_text,
+        })
+        track_index += 1
+
+    # 4. Retail sample (always at the end)
+    if include_retail_sample:
+        tracks.append({
+            "track_index": track_index,
+            "segment_type": "retail_sample",
+            "title": "Retail Sample",
+            "export_filename": generate_findaway_filename("retail_sample", 0, "Retail Sample"),
+            "source_chapter_id": None,
+            "text": retail_sample_text,
+        })
+        track_index += 1
+
+    logger.info(f"Generated {len(tracks)} tracks with Findaway filenames")
+    return tracks

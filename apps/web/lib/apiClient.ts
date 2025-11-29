@@ -87,7 +87,7 @@ async function fetchApi<T>(
 export interface Job {
   id: string
   user_id: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'parsing' | 'chapters_pending' | 'chapters_approved' | 'processing' | 'completed' | 'failed' | 'cancelled'
   mode: string
   title: string
   author?: string
@@ -511,4 +511,174 @@ export async function previewTTSVoice(request: TTSPreviewRequest): Promise<TTSPr
     method: 'POST',
     body: JSON.stringify(request),
   })
+}
+
+// ============================================
+// Chapter Management
+// ============================================
+
+export interface Chapter {
+  id: string
+  job_id: string
+  chapter_index: number
+  source_order: number
+  title: string
+  text_content?: string
+  character_count: number
+  word_count: number
+  estimated_duration_seconds: number
+  status: 'pending_review' | 'approved' | 'excluded' | 'processing' | 'completed' | 'failed'
+  segment_type: 'opening_credits' | 'front_matter' | 'body_chapter' | 'back_matter' | 'closing_credits' | 'retail_sample'
+  audio_path?: string
+  audio_duration_seconds?: number
+  error_message?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChapterUpdatePayload {
+  title?: string
+  status?: 'pending_review' | 'approved' | 'excluded'
+  segment_type?: 'front_matter' | 'body_chapter' | 'back_matter'
+}
+
+/**
+ * Get all chapters for a job
+ */
+export async function getJobChapters(jobId: string): Promise<Chapter[]> {
+  return fetchApi<Chapter[]>(`/jobs/${jobId}/chapters`)
+}
+
+/**
+ * Get a specific chapter
+ */
+export async function getChapter(jobId: string, chapterId: string): Promise<Chapter> {
+  return fetchApi<Chapter>(`/jobs/${jobId}/chapters/${chapterId}`)
+}
+
+/**
+ * Update a chapter
+ */
+export async function updateChapter(
+  jobId: string,
+  chapterId: string,
+  payload: ChapterUpdatePayload
+): Promise<Chapter> {
+  return fetchApi<Chapter>(`/jobs/${jobId}/chapters/${chapterId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+/**
+ * Reorder chapters
+ */
+export async function reorderChapters(
+  jobId: string,
+  newOrder: number[]
+): Promise<Chapter[]> {
+  return fetchApi<Chapter[]>(`/jobs/${jobId}/chapters/reorder`, {
+    method: 'POST',
+    body: JSON.stringify({ new_order: newOrder }),
+  })
+}
+
+/**
+ * Approve chapters and start TTS processing
+ */
+export async function approveChapters(
+  jobId: string,
+  chapterIds?: string[]
+): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${jobId}/chapters/approve`, {
+    method: 'POST',
+    body: JSON.stringify(chapterIds ? { chapter_ids: chapterIds } : {}),
+  })
+}
+
+// ============================================
+// Retail Samples
+// ============================================
+
+export interface RetailSample {
+  id: string
+  job_id: string
+  source_chapter_id?: string
+  source_chapter_title?: string
+  sample_text: string
+  word_count: number
+  character_count: number
+  estimated_duration_seconds: number
+  engagement_score?: number
+  emotional_intensity_score?: number
+  spoiler_risk_score?: number
+  overall_score?: number
+  is_auto_suggested: boolean
+  is_user_confirmed: boolean
+  is_final: boolean
+  audio_path?: string
+  created_at: string
+}
+
+/**
+ * Get retail sample candidates for a job
+ */
+export async function getRetailSamples(jobId: string): Promise<RetailSample[]> {
+  return fetchApi<RetailSample[]>(`/jobs/${jobId}/retail-samples`)
+}
+
+/**
+ * Confirm a retail sample selection
+ */
+export async function confirmRetailSample(
+  jobId: string,
+  sampleId: string
+): Promise<RetailSample> {
+  return fetchApi<RetailSample>(`/jobs/${jobId}/retail-samples/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ sample_id: sampleId }),
+  })
+}
+
+// ============================================
+// Tracks/Downloads
+// ============================================
+
+export interface Track {
+  id: string
+  job_id: string
+  chapter_id?: string
+  track_index: number
+  title: string
+  segment_type: string
+  audio_path?: string
+  duration_seconds?: number
+  file_size_bytes?: number
+  export_filename?: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  created_at: string
+}
+
+export interface TrackDownloadUrl {
+  track_id: string
+  export_filename: string
+  download_url: string
+  expires_in: number
+}
+
+/**
+ * Get all tracks for a completed job
+ */
+export async function getJobTracks(jobId: string): Promise<Track[]> {
+  return fetchApi<Track[]>(`/jobs/${jobId}/tracks`)
+}
+
+/**
+ * Get download URL for a specific track
+ */
+export async function getTrackDownloadUrl(
+  jobId: string,
+  trackId: string
+): Promise<TrackDownloadUrl> {
+  return fetchApi<TrackDownloadUrl>(`/jobs/${jobId}/tracks/${trackId}/download`)
 }
