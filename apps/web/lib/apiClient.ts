@@ -108,6 +108,11 @@ export interface Job {
   created_at: string
   started_at?: string
   completed_at?: string
+  // Multilingual TTS fields
+  input_language_code?: string
+  output_language_code?: string
+  voice_preset_id?: string
+  emotion_style_prompt?: string
   // Cover art fields
   generate_cover?: boolean
   cover_vibe?: string

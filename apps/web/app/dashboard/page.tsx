@@ -57,15 +57,15 @@ const OUTPUT_FORMATS = [
   { id: 'm4b', name: 'M4B', description: 'Audiobook format' },
 ]
 
-// Cover art vibe options
-const COVER_VIBES = [
-  { id: 'dramatic', name: 'Dramatic', description: 'Bold, cinematic style' },
-  { id: 'minimalist', name: 'Minimalist', description: 'Clean, simple design' },
-  { id: 'vintage', name: 'Vintage', description: 'Classic, retro feel' },
-  { id: 'fantasy', name: 'Fantasy', description: 'Magical, ethereal style' },
-  { id: 'modern', name: 'Modern', description: 'Contemporary, sleek design' },
-  { id: 'literary', name: 'Literary', description: 'Elegant, bookish aesthetic' },
-]
+// Cover art vibe options - DISABLED (Cover art moved to separate service)
+// const COVER_VIBES = [
+//   { id: 'dramatic', name: 'Dramatic', description: 'Bold, cinematic style' },
+//   { id: 'minimalist', name: 'Minimalist', description: 'Clean, simple design' },
+//   { id: 'vintage', name: 'Vintage', description: 'Classic, retro feel' },
+//   { id: 'fantasy', name: 'Fantasy', description: 'Magical, ethereal style' },
+//   { id: 'modern', name: 'Modern', description: 'Contemporary, sleek design' },
+//   { id: 'literary', name: 'Literary', description: 'Elegant, bookish aesthetic' },
+// ]
 
 interface UserWithMetadata {
   email?: string
@@ -105,10 +105,10 @@ function DashboardContent() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewAudio, setPreviewAudio] = useState<string | null>(null)
 
-  // Cover art options
-  const [generateCover, setGenerateCover] = useState(false)
-  const [coverVibe, setCoverVibe] = useState('dramatic')
-  const [coverDescription, setCoverDescription] = useState('')
+  // Cover art options - DISABLED (Cover art moved to separate service)
+  // const [generateCover, setGenerateCover] = useState(false)
+  // const [coverVibe, setCoverVibe] = useState('dramatic')
+  // const [coverDescription, setCoverDescription] = useState('')
 
   // Google Drive state
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatus | null>(null)
@@ -332,12 +332,12 @@ function DashboardContent() {
         // Text or Google Drive source path
         ...(inputMode === 'text' ? { manuscript_text: text } : {}),
         ...(inputMode === 'google_drive' && importedManuscriptPath ? { source_path: importedManuscriptPath } : {}),
-        // Cover art options
-        ...(generateCover ? {
-          generate_cover: true,
-          cover_vibe: coverVibe,
-          ...(coverDescription.trim() ? { cover_description: coverDescription.trim() } : {}),
-        } : {}),
+        // Cover art options - DISABLED (Cover art moved to separate service)
+        // ...(generateCover ? {
+        //   generate_cover: true,
+        //   cover_vibe: coverVibe,
+        //   ...(coverDescription.trim() ? { cover_description: coverDescription.trim() } : {}),
+        // } : {}),
       }
 
       await createJob(payload, inputMode === 'file' ? file! : undefined)
@@ -352,8 +352,9 @@ function DashboardContent() {
       setTitle('')
       setSelectedDriveFile(null)
       setImportedManuscriptPath(null)
-      setGenerateCover(false)
-      setCoverDescription('')
+      // Cover art reset - DISABLED
+      // setGenerateCover(false)
+      // setCoverDescription('')
       setEmotionStyle('')
       setPreviewAudio(null)
     } catch (err) {
@@ -783,68 +784,8 @@ function DashboardContent() {
               </select>
             </div>
 
-            {/* Cover Art Generation */}
-            <div className="mt-6 p-4 rounded-lg bg-af-card border border-af-card-border">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <label className="text-sm font-medium text-white/80">
-                    Generate AI Cover Art
-                  </label>
-                  <p className="text-xs text-white/40 mt-1">
-                    Create a unique cover image for your audiobook
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setGenerateCover(!generateCover)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    generateCover ? 'bg-af-purple' : 'bg-white/20'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      generateCover ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {generateCover && (
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">
-                      Cover Style
-                    </label>
-                    <select
-                      value={coverVibe}
-                      onChange={(e) => setCoverVibe(e.target.value)}
-                      className="input-field"
-                    >
-                      {COVER_VIBES.map((vibe) => (
-                        <option key={vibe.id} value={vibe.id}>
-                          {vibe.name} - {vibe.description}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">
-                      Custom Description <span className="text-white/40">(optional)</span>
-                    </label>
-                    <textarea
-                      value={coverDescription}
-                      onChange={(e) => setCoverDescription(e.target.value)}
-                      placeholder="Describe what you want on your cover... e.g., 'A dark forest with glowing eyes in the shadows' or 'A woman in a red dress standing on a cliff overlooking the ocean at sunset'"
-                      className="input-field min-h-[80px] resize-y"
-                      rows={3}
-                    />
-                    <p className="text-xs text-white/40 mt-1">
-                      Be specific about colors, mood, objects, and style you want
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Cover Art Generation - DISABLED (Moved to separate service) */}
+            {/* TODO: Re-enable when cover art service is ready */}
 
             {/* Error message */}
             {createError && (
