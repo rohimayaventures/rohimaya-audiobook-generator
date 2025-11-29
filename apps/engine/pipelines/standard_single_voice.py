@@ -31,9 +31,15 @@ class SingleVoicePipeline:
         api_key: str,
         model_name: str = "gpt-4o-mini-tts",
         voice_name: str = "sage",
-        max_words_per_chunk: int = 700,
-        max_chars_per_chunk: int = 5000
+        max_words_per_chunk: int = 500,
+        max_chars_per_chunk: int = 3500
     ):
+        """
+        Initialize the single voice pipeline.
+
+        Note: OpenAI TTS has a strict 4096 char / 2000 token limit.
+        We use conservative defaults (3500 chars, 500 words) to stay safe.
+        """
         self.client = OpenAI(api_key=api_key)
         self.model_name = model_name
         self.voice_name = voice_name

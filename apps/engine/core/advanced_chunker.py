@@ -9,8 +9,8 @@ from typing import List
 
 def chunk_chapter_advanced(
     text: str,
-    max_words: int = 700,
-    max_chars: int = 5000
+    max_words: int = 500,
+    max_chars: int = 3500
 ) -> List[str]:
     """
     Split chapter text into chunks that stay under token limits.
@@ -19,10 +19,13 @@ def chunk_chapter_advanced(
 
     Algorithm from husband's generate_full_book.py (lines 125-225)
 
+    IMPORTANT: OpenAI TTS has a strict 4096 character / 2000 token limit.
+    We use conservative defaults (3500 chars, 500 words) to stay well under.
+
     Args:
         text: Chapter text to chunk
-        max_words: Maximum words per chunk (default: 700 ~ 900 tokens)
-        max_chars: Maximum characters per chunk (default: 5000 ~ 1250 tokens)
+        max_words: Maximum words per chunk (default: 500 ~ 650 tokens)
+        max_chars: Maximum characters per chunk (default: 3500 - safe for OpenAI TTS)
 
     Returns:
         List of text chunks
