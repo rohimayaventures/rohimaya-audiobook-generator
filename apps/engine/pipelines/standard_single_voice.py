@@ -1,16 +1,21 @@
 """
 Standard Single-Voice Pipeline
 Full-book audiobook generation with a single narrator voice
-Integrated from husband's generate_full_book.py
+
+Supports multiple TTS providers:
+- Google Cloud TTS (recommended for long books, 5000 char limit)
+- OpenAI TTS (4096 char limit)
 """
 
 import os
+import logging
 from pathlib import Path
 from typing import List, Dict, Optional
-from openai import OpenAI
 
 from core.chapter_parser import split_into_chapters, sanitize_title_for_filename, clean_text
 from core.advanced_chunker import chunk_chapter_advanced
+
+logger = logging.getLogger(__name__)
 
 try:
     from pydub import AudioSegment
@@ -21,47 +26,73 @@ except ImportError:
 
 class SingleVoicePipeline:
     """
-    Full-book audiobook generation pipeline using OpenAI TTS.
+    Full-book audiobook generation pipeline.
 
-    Based on husband's generate_full_book.py implementation.
+    Supports both Google Cloud TTS and OpenAI TTS.
+    Google TTS is preferred for longer books (higher character limits).
     """
 
     def __init__(
         self,
         api_key: str,
-        model_name: str = "gpt-4o-mini-tts",
-        voice_name: str = "sage",
+        voice_name: str = "en-US-Neural2-D",
+        tts_provider: str = "google",
         max_words_per_chunk: int = 500,
-        max_chars_per_chunk: int = 3500
+        max_chars_per_chunk: int = 4500,  # Google allows 5000, use 4500 for safety
+        model_name: str = "tts-1-hd",  # Only used for OpenAI
     ):
         """
         Initialize the single voice pipeline.
 
-        Note: OpenAI TTS has a strict 4096 char / 2000 token limit.
-        We use conservative defaults (3500 chars, 500 words) to stay safe.
+        Args:
+            api_key: API key for the TTS provider
+            voice_name: Voice ID (Google: en-US-Neural2-D, OpenAI: alloy/nova/etc)
+            tts_provider: TTS provider ('google' or 'openai')
+            max_words_per_chunk: Maximum words per chunk
+            max_chars_per_chunk: Maximum characters per chunk
+            model_name: Model name (only used for OpenAI)
         """
-        self.client = OpenAI(api_key=api_key)
-        self.model_name = model_name
+        self.api_key = api_key
         self.voice_name = voice_name
+        self.tts_provider = tts_provider
         self.max_words = max_words_per_chunk
         self.max_chars = max_chars_per_chunk
+        self.model_name = model_name
+
+        # Initialize the appropriate TTS provider
+        if tts_provider == "google":
+            from src.tts_google import GoogleCloudTTSProvider
+            self.tts = GoogleCloudTTSProvider(api_key=api_key)
+            # Google allows 5000 chars, use more generous limit
+            self.max_chars = min(max_chars_per_chunk, 4500)
+            logger.info(f"Using Google Cloud TTS with voice: {voice_name}")
+        else:
+            from openai import OpenAI
+            self.client = OpenAI(api_key=api_key)
+            self.tts = None
+            # OpenAI has strict 4096 char limit
+            self.max_chars = min(max_chars_per_chunk, 3500)
+            logger.info(f"Using OpenAI TTS with voice: {voice_name}")
 
     def generate_audio_chunk(self, text: str, output_path: Path) -> bool:
         """
-        Generate audio from text using OpenAI TTS API.
+        Generate audio from text using configured TTS provider.
         Returns True if successful, False otherwise.
         """
         try:
             print(f"   🎙️ Generating audio: {output_path.name}")
 
-            response = self.client.audio.speech.create(
-                model=self.model_name,
-                voice=self.voice_name,
-                input=text
-            )
-
-            # Read audio bytes
-            audio_bytes = response.read()
+            if self.tts_provider == "google" and self.tts:
+                # Use Google Cloud TTS
+                audio_bytes = self.tts.synthesize(text, self.voice_name)
+            else:
+                # Use OpenAI TTS
+                response = self.client.audio.speech.create(
+                    model=self.model_name,
+                    voice=self.voice_name,
+                    input=text
+                )
+                audio_bytes = response.read()
 
             # Write to file
             with open(output_path, "wb") as f:
@@ -72,6 +103,7 @@ class SingleVoicePipeline:
 
         except Exception as e:
             print(f"   ❌ Failed to generate {output_path.name}: {e}")
+            logger.error(f"TTS generation failed: {e}")
             return False
 
     def merge_chunks_pydub(self, chunk_paths: List[Path], final_path: Path) -> bool:
@@ -240,7 +272,7 @@ def generate_single_voice_audiobook(
     output_dir: Path,
     api_key: str,
     voice_id: str,
-    tts_provider: str = "openai",
+    tts_provider: str = "google",
     book_title: str = "Audiobook"
 ) -> List[Path]:
     """
@@ -251,18 +283,32 @@ def generate_single_voice_audiobook(
         output_dir: Directory to save output files
         api_key: API key for the TTS provider
         voice_id: Voice ID to use for narration
-        tts_provider: TTS provider (currently only 'openai' supported)
+        tts_provider: TTS provider ('google' or 'openai')
         book_title: Title for the final merged audiobook file
 
     Returns:
         List of paths to generated audio files (final merged file is last)
     """
-    if tts_provider != "openai":
-        raise ValueError(f"Single voice pipeline currently only supports OpenAI, got: {tts_provider}")
+    # Map OpenAI voice aliases to Google voices if using Google provider
+    google_voice_map = {
+        "alloy": "en-US-Neural2-D",
+        "echo": "en-US-Neural2-J",
+        "fable": "en-GB-Neural2-D",
+        "onyx": "en-US-Neural2-A",
+        "nova": "en-US-Neural2-C",
+        "shimmer": "en-US-Neural2-F",
+        "sage": "en-US-Neural2-G",
+    }
+
+    # If using Google and voice_id is an OpenAI alias, map it
+    if tts_provider == "google" and voice_id in google_voice_map:
+        voice_id = google_voice_map[voice_id]
+        logger.info(f"Mapped OpenAI voice alias to Google voice: {voice_id}")
 
     pipeline = SingleVoicePipeline(
         api_key=api_key,
         voice_name=voice_id,
+        tts_provider=tts_provider,
     )
 
     return pipeline.generate_full_book(manuscript_text, output_dir, book_title)

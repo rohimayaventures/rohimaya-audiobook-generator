@@ -196,20 +196,34 @@ async def process_job(job_id: str):
 
         # Import and run pipelines
         if mode == "single_voice":
-            # Currently only OpenAI is supported for single-voice
-            if tts_provider != "openai":
-                logger.warning(f"[JOB] {job_id} - Forcing provider from {tts_provider} to openai (only supported)")
-                tts_provider = "openai"
-
             from pipelines.standard_single_voice import generate_single_voice_audiobook
 
-            # Get API key
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                raise ValueError("OPENAI_API_KEY not configured in environment")
+            # Determine which TTS provider to use
+            # Priority: Google > OpenAI (Google has higher limits for long books)
+            google_api_key = os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("GOOGLE_CLOUD_API_KEY")
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+
+            if tts_provider == "google" and google_api_key:
+                api_key = google_api_key
+                logger.info(f"[JOB] {job_id} - Using Google Cloud TTS")
+            elif tts_provider == "openai" and openai_api_key:
+                api_key = openai_api_key
+                logger.info(f"[JOB] {job_id} - Using OpenAI TTS")
+            elif google_api_key:
+                # Default to Google if available (better for long books)
+                api_key = google_api_key
+                tts_provider = "google"
+                logger.info(f"[JOB] {job_id} - Defaulting to Google Cloud TTS (recommended for long books)")
+            elif openai_api_key:
+                # Fallback to OpenAI
+                api_key = openai_api_key
+                tts_provider = "openai"
+                logger.info(f"[JOB] {job_id} - Falling back to OpenAI TTS")
+            else:
+                raise ValueError("No TTS API key configured. Set GOOGLE_GENAI_API_KEY or OPENAI_API_KEY")
 
             # Run pipeline
-            logger.info(f"[PIPELINE] {job_id} - Running single-voice pipeline")
+            logger.info(f"[PIPELINE] {job_id} - Running single-voice pipeline with {tts_provider}")
 
             db.update_job(job_id, {"progress_percent": 15.0})
 
