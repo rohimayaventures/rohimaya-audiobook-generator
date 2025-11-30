@@ -190,11 +190,31 @@ function LibraryContent() {
       case 'completed':
         return 'bg-green-500/20 text-green-400'
       case 'processing':
+      case 'parsing':
+      case 'chapters_approved':
         return 'bg-yellow-500/20 text-yellow-400'
+      case 'chapters_pending':
+        return 'bg-blue-500/20 text-blue-400'
       case 'failed':
         return 'bg-red-500/20 text-red-400'
+      case 'cancelled':
+        return 'bg-gray-500/20 text-gray-400'
       default:
         return 'bg-white/10 text-white/60'
+    }
+  }
+
+  // Status text for display
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'chapters_pending':
+        return 'Review Chapters'
+      case 'chapters_approved':
+        return 'Processing'
+      case 'parsing':
+        return 'Parsing'
+      default:
+        return status
     }
   }
 
@@ -262,7 +282,7 @@ function LibraryContent() {
                       job.status
                     )}`}
                   >
-                    {job.status}
+                    {getStatusText(job.status)}
                   </span>
                 </div>
 
@@ -300,13 +320,24 @@ function LibraryContent() {
 
                 {/* Actions */}
                 <div className="flex gap-2 flex-wrap">
-                  <SecondaryButton
-                    href={`/job/${job.id}`}
-                    className="flex-1 min-w-[100px]"
-                    size="sm"
-                  >
-                    View details
-                  </SecondaryButton>
+                  {/* Review chapters action for chapters_pending status */}
+                  {job.status === 'chapters_pending' ? (
+                    <PrimaryButton
+                      href={`/job/${job.id}`}
+                      className="flex-1 min-w-[100px]"
+                      size="sm"
+                    >
+                      Review Chapters
+                    </PrimaryButton>
+                  ) : (
+                    <SecondaryButton
+                      href={`/job/${job.id}`}
+                      className="flex-1 min-w-[100px]"
+                      size="sm"
+                    >
+                      View details
+                    </SecondaryButton>
+                  )}
 
                   {job.status === 'completed' && (
                     <PrimaryButton

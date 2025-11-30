@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { ChapterReview } from '@/components/chapters'
+import { TracksView } from '@/components/tracks'
 import { getCurrentUser } from '@/lib/supabaseClient'
 import { getJob, getJobDownloadUrl, cancelJob, retryJob, type Job } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
@@ -338,40 +339,22 @@ function JobDetailContent() {
               </GlassCard>
             )}
 
-            {/* Audio Player & Download */}
+            {/* Audio Tracks & Downloads - Show for completed jobs */}
             {job.status === 'completed' && (
+              <TracksView job={job} />
+            )}
+
+            {/* Legacy Audio Player (fallback when no tracks available) */}
+            {job.status === 'completed' && audioUrl && (
               <GlassCard>
-                <h2 className="text-lg font-semibold text-white mb-4">Your Audiobook</h2>
-
-                {audioUrl ? (
-                  <div className="space-y-4">
-                    <audio
-                      controls
-                      className="w-full"
-                      src={audioUrl}
-                    >
-                      Your browser does not support the audio element.
-                    </audio>
-
-                    <div className="flex gap-4">
-                      <PrimaryButton
-                        className="flex-1"
-                        onClick={() => {
-                          const link = document.createElement('a')
-                          link.href = audioUrl
-                          link.download = `${job.title || 'audiobook'}.mp3`
-                          document.body.appendChild(link)
-                          link.click()
-                          document.body.removeChild(link)
-                        }}
-                      >
-                        Download audiobook
-                      </PrimaryButton>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-white/60">Loading audio...</p>
-                )}
+                <h2 className="text-lg font-semibold text-white mb-4">Quick Listen</h2>
+                <audio
+                  controls
+                  className="w-full"
+                  src={audioUrl}
+                >
+                  Your browser does not support the audio element.
+                </audio>
               </GlassCard>
             )}
 
