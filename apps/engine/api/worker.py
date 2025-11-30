@@ -34,6 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger("worker")
 
 from .database import db
+from .email import send_job_completed_email, send_job_failed_email, is_email_configured
 
 # Load environment variables (only for local development)
 # In production (Railway), env vars are set directly
@@ -52,6 +53,40 @@ except ImportError:
 # Job queue
 job_queue: asyncio.Queue = asyncio.Queue()
 processing_jobs: set = set()
+
+# Retry configuration
+MAX_AUTO_RETRIES = 3  # Maximum automatic retries before marking as failed
+RETRY_BASE_DELAY = 30  # Base delay in seconds (doubles with each retry)
+
+# Transient errors that should trigger automatic retry
+TRANSIENT_ERROR_PATTERNS = [
+    "rate limit",
+    "429",
+    "503",
+    "502",
+    "timeout",
+    "timed out",
+    "connection reset",
+    "connection refused",
+    "temporarily unavailable",
+    "server error",
+    "resource exhausted",
+    "quota exceeded",
+]
+
+
+def is_transient_error(error_message: str) -> bool:
+    """
+    Check if an error is transient and should trigger automatic retry.
+
+    Args:
+        error_message: The error message string
+
+    Returns:
+        True if the error appears to be transient
+    """
+    error_lower = error_message.lower()
+    return any(pattern in error_lower for pattern in TRANSIENT_ERROR_PATTERNS)
 
 
 def extract_text_from_file(file_content: bytes, source_path: str) -> str:
@@ -341,6 +376,89 @@ def get_temp_directory(job_id: str) -> Path:
     return job_temp
 
 
+def get_user_info(user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get user info from Supabase for email notifications.
+
+    Args:
+        user_id: User UUID
+
+    Returns:
+        Dictionary with user email and name, or None if not found
+    """
+    try:
+        # Query user profile from Supabase
+        result = db.client.table("profiles").select("email, full_name, display_name").eq(
+            "id", user_id
+        ).single().execute()
+
+        if result.data:
+            user = result.data
+            # Get display name (fallback to full_name, then email prefix)
+            display_name = (
+                user.get("display_name") or
+                user.get("full_name") or
+                user.get("email", "").split("@")[0] or
+                "User"
+            )
+            return {
+                "email": user.get("email"),
+                "name": display_name,
+            }
+    except Exception as e:
+        logger.warning(f"[EMAIL] Could not fetch user info for {user_id}: {e}")
+
+    return None
+
+
+async def send_job_notification(job_id: str, job: Dict[str, Any], success: bool, error_message: Optional[str] = None):
+    """
+    Send email notification for job completion/failure.
+
+    Args:
+        job_id: Job UUID
+        job: Job data dictionary
+        success: Whether job completed successfully
+        error_message: Error message if job failed
+    """
+    if not is_email_configured():
+        logger.debug("[EMAIL] Email not configured, skipping notification")
+        return
+
+    user_info = get_user_info(job["user_id"])
+    if not user_info or not user_info.get("email"):
+        logger.warning(f"[EMAIL] No email found for user {job['user_id']}, skipping notification")
+        return
+
+    try:
+        if success:
+            # Calculate duration in minutes
+            duration_seconds = job.get("duration_seconds", 0)
+            duration_minutes = max(1, duration_seconds // 60)
+
+            await send_job_completed_email(
+                to_email=user_info["email"],
+                to_name=user_info["name"],
+                job_title=job.get("title", "Untitled"),
+                job_id=job_id,
+                duration_minutes=duration_minutes,
+            )
+            logger.info(f"[EMAIL] Sent completion email to {user_info['email']} for job {job_id}")
+        else:
+            await send_job_failed_email(
+                to_email=user_info["email"],
+                to_name=user_info["name"],
+                job_title=job.get("title", "Untitled"),
+                job_id=job_id,
+                error_message=error_message or "Unknown error",
+            )
+            logger.info(f"[EMAIL] Sent failure email to {user_info['email']} for job {job_id}")
+
+    except Exception as e:
+        # Don't fail the job if email fails
+        logger.error(f"[EMAIL] Failed to send notification email: {e}")
+
+
 async def enqueue_job(job_id: str):
     """
     Add job to processing queue
@@ -367,6 +485,7 @@ async def process_job(job_id: str):
     5. Updates job status to completed or failed
     """
     output_dir = None
+    job = None  # Initialize for email notification in except block
 
     try:
         # Add to processing set
@@ -616,6 +735,10 @@ async def process_job(job_id: str):
 
             logger.info(f"[JOB] {job_id} - Completed (Findaway) - Duration: {duration_seconds}s, Sections: {result.get('section_count', 0)}")
 
+            # Send completion email notification
+            job["duration_seconds"] = duration_seconds  # Add for email
+            await send_job_notification(job_id, job, success=True)
+
             # Skip the normal upload flow since we handled it above
             return
 
@@ -712,18 +835,64 @@ async def process_job(job_id: str):
 
         logger.info(f"[JOB] {job_id} - Completed - Duration: {duration_seconds}s, Size: {file_size} bytes")
 
+        # Send completion email notification
+        job["duration_seconds"] = duration_seconds  # Add for email
+        await send_job_notification(job_id, job, success=True)
+
     except Exception as e:
         # Log error with full traceback
         error_message = f"{type(e).__name__}: {str(e)}"
         logger.error(f"[JOB] {job_id} - Failed: {error_message}")
         logger.error(traceback.format_exc())
 
-        # Update job to failed with detailed error
-        db.update_job(job_id, {
-            "status": "failed",
-            "error_message": error_message,
-            "completed_at": datetime.utcnow().isoformat(),
-        })
+        # Check if this is a transient error that should be auto-retried
+        current_retry_count = job.get("retry_count", 0) if job else 0
+        should_auto_retry = (
+            is_transient_error(error_message) and
+            current_retry_count < MAX_AUTO_RETRIES and
+            job is not None
+        )
+
+        if should_auto_retry:
+            # Calculate exponential backoff delay
+            retry_delay = RETRY_BASE_DELAY * (2 ** current_retry_count)
+            next_retry = current_retry_count + 1
+
+            logger.info(f"[JOB] {job_id} - Transient error detected, scheduling auto-retry {next_retry}/{MAX_AUTO_RETRIES} in {retry_delay}s")
+
+            # Update job for retry
+            db.update_job(job_id, {
+                "status": "pending",
+                "error_message": f"Auto-retry {next_retry}/{MAX_AUTO_RETRIES} scheduled (previous error: {error_message})",
+                "progress_percent": 0.0,
+                "current_step": f"Waiting {retry_delay}s before retry...",
+                "retry_count": next_retry,
+            })
+
+            # Schedule delayed retry
+            async def delayed_retry():
+                await asyncio.sleep(retry_delay)
+                await enqueue_job(job_id)
+                logger.info(f"[JOB] {job_id} - Auto-retry {next_retry} enqueued after {retry_delay}s delay")
+
+            asyncio.create_task(delayed_retry())
+
+        else:
+            # Permanent failure - update job and send email
+            final_message = error_message
+            if current_retry_count >= MAX_AUTO_RETRIES:
+                final_message = f"Max retries ({MAX_AUTO_RETRIES}) exceeded. Last error: {error_message}"
+                logger.error(f"[JOB] {job_id} - Max auto-retries exceeded")
+
+            db.update_job(job_id, {
+                "status": "failed",
+                "error_message": final_message,
+                "completed_at": datetime.utcnow().isoformat(),
+            })
+
+            # Send failure email notification
+            if job:
+                await send_job_notification(job_id, job, success=False, error_message=final_message)
 
     finally:
         # Remove from processing set

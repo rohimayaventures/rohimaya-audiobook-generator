@@ -436,6 +436,7 @@ export interface VoicePreset {
   default_language_code: string
   gender: string
   style: string
+  sample_text?: string
 }
 
 export interface LanguageInfo {

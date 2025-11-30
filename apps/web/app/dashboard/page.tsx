@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useDropzone } from 'react-dropzone'
-import { GlassCard, PrimaryButton } from '@/components/ui'
+import { toast } from 'sonner'
+import { GlassCard, PrimaryButton, HelpTooltip, SkeletonJobCard, SkeletonVoiceOption, NoAudiobooksState } from '@/components/ui'
 import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { createClient, getCurrentUser } from '@/lib/supabaseClient'
 import {
@@ -94,6 +95,7 @@ function DashboardContent() {
   const [emotionStyle, setEmotionStyle] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewAudio, setPreviewAudio] = useState<string | null>(null)
+  const [previewText, setPreviewText] = useState('My heart found its home in your hands. Every whisper between us tells a story of forever.')
 
   // Google Drive state
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatus | null>(null)
@@ -193,8 +195,10 @@ function DashboardContent() {
       setGoogleDriveStatus({ connected: false, has_tokens: false, configured: googleDriveStatus?.configured || false })
       setGoogleDriveFiles([])
       setSelectedDriveFile(null)
+      toast.success('Google Drive disconnected')
     } catch (err) {
       console.error('Failed to disconnect Google Drive:', err)
+      toast.error('Failed to disconnect Google Drive')
     }
   }
 
@@ -211,9 +215,14 @@ function DashboardContent() {
       if (!title) {
         setTitle(result.filename.replace(/\.[^/.]+$/, ''))
       }
+      toast.success('File imported successfully', {
+        description: `"${result.filename}" is ready to convert`,
+      })
     } catch (err) {
       console.error('Failed to import Drive file:', err)
-      setCreateError(err instanceof Error ? err.message : 'Failed to import file')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to import file'
+      setCreateError(errorMessage)
+      toast.error('Import failed', { description: errorMessage })
     }
 
     setDriveImporting(false)
@@ -224,8 +233,12 @@ function DashboardContent() {
     setPreviewLoading(true)
     setPreviewAudio(null)
 
+    // Show loading toast
+    const loadingToast = toast.loading('Generating voice preview...')
+
     try {
       const response = await previewTTSVoice({
+        text: previewText || undefined,
         preset_id: selectedVoiceId,
         input_language_code: inputLanguage,
         output_language_code: outputLanguage || undefined,
@@ -240,12 +253,17 @@ function DashboardContent() {
         // Auto-play the preview
         const audio = new Audio(audioUrl)
         audio.play().catch(console.error)
+
+        toast.success('Voice preview ready!', { id: loadingToast })
       } else {
         setCreateError(response.error || 'Failed to generate preview')
+        toast.error('Preview failed', { id: loadingToast, description: response.error })
       }
     } catch (err) {
       console.error('Failed to preview voice:', err)
-      setCreateError(err instanceof Error ? err.message : 'Failed to preview voice')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to preview voice'
+      setCreateError(errorMessage)
+      toast.error('Preview failed', { id: loadingToast, description: errorMessage })
     }
 
     setPreviewLoading(false)
@@ -325,6 +343,11 @@ function DashboardContent() {
       const updatedJobs = await getJobs({ limit: 5 })
       setJobs(updatedJobs)
 
+      // Show success toast
+      toast.success('Audiobook creation started!', {
+        description: `"${payload.title}" is now being processed. You'll be notified when it's ready.`,
+      })
+
       // Reset form
       setFile(null)
       setText('')
@@ -334,7 +357,11 @@ function DashboardContent() {
       setEmotionStyle('')
       setPreviewAudio(null)
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create job')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create job'
+      setCreateError(errorMessage)
+      toast.error('Failed to create audiobook', {
+        description: errorMessage,
+      })
     }
 
     setCreating(false)
@@ -694,7 +721,15 @@ function DashboardContent() {
                 </label>
                 <select
                   value={selectedVoiceId}
-                  onChange={(e) => setSelectedVoiceId(e.target.value)}
+                  onChange={(e) => {
+                    const voiceId = e.target.value
+                    setSelectedVoiceId(voiceId)
+                    // Update preview text to match the selected voice's sample text
+                    const selectedVoice = voicePresets.find(v => v.id === voiceId)
+                    if (selectedVoice?.sample_text) {
+                      setPreviewText(selectedVoice.sample_text)
+                    }
+                  }}
                   className="input-field"
                   disabled={loadingVoiceLibrary}
                 >
@@ -724,21 +759,37 @@ function DashboardContent() {
                 </p>
               </div>
 
-              {/* Preview Button */}
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handlePreviewVoice}
-                  disabled={previewLoading}
-                  className="px-4 py-2 rounded-lg bg-af-purple/20 hover:bg-af-purple/30 text-af-purple text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  {previewLoading ? 'Generating...' : 'Preview Voice'}
-                </button>
-                {previewAudio && (
-                  <audio controls src={previewAudio} className="h-8 flex-1">
-                    Your browser does not support audio playback.
-                  </audio>
-                )}
+              {/* Voice Preview */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-white/80">
+                  Preview Text
+                </label>
+                <textarea
+                  value={previewText}
+                  onChange={(e) => setPreviewText(e.target.value)}
+                  placeholder="Enter custom text to preview the voice..."
+                  rows={2}
+                  maxLength={500}
+                  className="input-field text-sm resize-none"
+                />
+                <p className="text-xs text-white/40">
+                  {previewText.length}/500 characters
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePreviewVoice}
+                    disabled={previewLoading || !previewText.trim()}
+                    className="px-4 py-2 rounded-lg bg-af-purple/20 hover:bg-af-purple/30 text-af-purple text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {previewLoading ? 'Generating...' : 'Preview Voice'}
+                  </button>
+                  {previewAudio && (
+                    <audio controls src={previewAudio} className="h-8 flex-1">
+                      Your browser does not support audio playback.
+                    </audio>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -120,10 +120,10 @@ export function InteractiveDemo() {
             <p className="text-white/60 text-sm mb-4">Select narrator voice:</p>
             <div className="space-y-3 flex-1 overflow-hidden">
               {[
-                { name: 'Emma', style: 'Natural & Warm', selected: true, color: 'from-pink-500 to-rose-500' },
-                { name: 'James', style: 'Deep & Authoritative', selected: false, color: 'from-blue-500 to-indigo-500' },
-                { name: 'Sarah', style: 'Friendly & Expressive', selected: false, color: 'from-purple-500 to-violet-500' },
-                { name: 'Michael', style: 'Calm & Professional', selected: false, color: 'from-green-500 to-emerald-500' },
+                { name: 'Celeste Monroe', style: 'Warm & Captivating - Romance', selected: true, color: 'from-pink-500 to-rose-500' },
+                { name: 'James Hartley', style: 'Smooth & Magnetic - Thrillers', selected: false, color: 'from-blue-500 to-indigo-500' },
+                { name: 'Phoenix Starling', style: 'Dynamic & Theatrical - Fantasy', selected: false, color: 'from-purple-500 to-violet-500' },
+                { name: 'Dr. Evelyn Reed', style: 'Clear & Articulate - Non-Fiction', selected: false, color: 'from-green-500 to-emerald-500' },
               ].map((voice, i) => (
                 <div
                   key={voice.name}

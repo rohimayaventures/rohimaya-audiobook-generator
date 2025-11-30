@@ -34,6 +34,7 @@ class VoicePreset:
     default_language_code: str # e.g. "en-US"
     gender: str               # "male", "female", "neutral"
     style: str                # Default style/emotion
+    sample_text: str = ""     # Genre-appropriate preview text for this narrator
 
 
 # Gemini 2.5 Flash TTS Prebuilt Voices
@@ -51,6 +52,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="female",
         style="warm, engaging",
+        sample_text="My heart found its home in your hands. Every whisper between us tells a story of forever, a promise written in the stars.",
     ),
     "narrator_female_soft": VoicePreset(
         id="narrator_female_soft",
@@ -60,6 +62,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="female",
         style="soft, gentle",
+        sample_text="He traced the curve of her cheek with trembling fingers. 'Stay,' he whispered. 'Stay, and let me prove my heart belongs to you.'",
     ),
     "narrator_female_smooth": VoicePreset(
         id="narrator_female_smooth",
@@ -69,6 +72,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="female",
         style="smooth, flowing",
+        sample_text="The garden held its breath as autumn descended, each leaf a whispered memory of summers past, each shadow a story waiting to unfold.",
     ),
     "narrator_female_youthful": VoicePreset(
         id="narrator_female_youthful",
@@ -78,6 +82,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="female",
         style="youthful, fresh",
+        sample_text="I never expected summer camp to change everything. But then again, I never expected to discover I had powers, either. Awkward.",
     ),
     "narrator_female_clear": VoicePreset(
         id="narrator_female_clear",
@@ -87,6 +92,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="female",
         style="clear, articulate",
+        sample_text="The human brain processes eleven million bits of information every second. Yet we're only consciously aware of about forty.",
     ),
     "narrator_male_calm": VoicePreset(
         id="narrator_male_calm",
@@ -96,6 +102,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="male",
         style="calm, professional",
+        sample_text="In eighteen forty-eight, gold was discovered at Sutter's Mill. Within months, three hundred thousand prospectors flooded into California.",
     ),
     "narrator_male_smooth": VoicePreset(
         id="narrator_male_smooth",
@@ -105,6 +112,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="male",
         style="smooth, rich",
+        sample_text="The file landed on my desk at midnight. Three people were dead, and the only witness had just gone missing. This was going to be a long night.",
     ),
     "narrator_male_warm": VoicePreset(
         id="narrator_male_warm",
@@ -114,6 +122,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="male",
         style="warm, inviting",
+        sample_text="My grandfather always said, 'The best stories aren't in books—they're in the lines on an old man's face.' I finally understand what he meant.",
     ),
     "narrator_male_gravelly": VoicePreset(
         id="narrator_male_gravelly",
@@ -123,6 +132,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="male",
         style="gravelly, deep",
+        sample_text="Rain hammered the pavement like bullets. She walked out of my life that night, taking nothing but my trust and leaving nothing but questions.",
     ),
     "narrator_male_mature": VoicePreset(
         id="narrator_male_mature",
@@ -132,6 +142,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="male",
         style="mature, seasoned",
+        sample_text="The manor had stood for three centuries, its walls bearing witness to revolution, scandal, and the quiet tragedies of ordinary lives.",
     ),
     "narrator_male_knowledgeable": VoicePreset(
         id="narrator_male_knowledgeable",
@@ -141,6 +152,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="male",
         style="knowledgeable, authoritative",
+        sample_text="Quantum entanglement suggests particles can communicate instantly across vast distances. Einstein called it 'spooky action at a distance.'",
     ),
     "storyteller_expressive": VoicePreset(
         id="storyteller_expressive",
@@ -150,6 +162,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="expressive, dynamic",
+        sample_text="The dragon unfurled its wings, shadow stretching across the valley. 'You dare enter my domain, little warrior? Then let us see what courage you carry!'",
     ),
     "storyteller_lively": VoicePreset(
         id="storyteller_lively",
@@ -159,6 +172,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="lively, energetic",
+        sample_text="Benny the bunny bounced through the meadow. 'Today,' he declared, 'is going to be the best adventure ever!' And oh boy, was he right!",
     ),
     "storyteller_friendly": VoicePreset(
         id="storyteller_friendly",
@@ -168,6 +182,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="friendly, approachable",
+        sample_text="So there I was, standing in the middle of the airport, with no luggage and a plane ticket to the wrong country. Let me tell you how that happened.",
     ),
     "studio_neutral": VoicePreset(
         id="studio_neutral",
@@ -177,6 +192,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="neutral, clear",
+        sample_text="Welcome to your audiobook. I'll be guiding you through this story with clarity and care, bringing each word to life as the author intended.",
     ),
     "studio_bright": VoicePreset(
         id="studio_bright",
@@ -186,6 +202,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="bright, clear",
+        sample_text="Today is the day you stop waiting and start doing. Your potential is unlimited—it's time to unlock it. Are you ready to transform your life?",
     ),
     "studio_even": VoicePreset(
         id="studio_even",
@@ -195,6 +212,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="even, balanced",
+        sample_text="Step one: open the application. Step two: navigate to settings. Step three: select your preferences. These simple steps will optimize your workflow.",
     ),
     "casual_narrator": VoicePreset(
         id="casual_narrator",
@@ -204,6 +222,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="casual, relaxed",
+        sample_text="You know what? Life's too short for perfect plans. Sometimes you just gotta grab your bag and go. That's exactly what I did last summer.",
     ),
     "gentle_narrator": VoicePreset(
         id="gentle_narrator",
@@ -213,6 +232,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-US",
         gender="neutral",
         style="gentle, soothing",
+        sample_text="Close your eyes and breathe deeply. Feel the tension leaving your body with each exhale. You are safe. You are calm. You are exactly where you need to be.",
     ),
 
     # =========================================================================
@@ -226,6 +246,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-GB",
         gender="female",
         style="elegant, refined",
+        sample_text="One must always maintain composure, even when the world around us crumbles. Tea, my dear? It's frightfully good for steadying the nerves.",
     ),
     "narrator_british_male": VoicePreset(
         id="narrator_british_male",
@@ -235,6 +256,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-GB",
         gender="male",
         style="distinguished, classic",
+        sample_text="It was the sort of evening that reminded one of better days—when honour meant something, and a gentleman's word was his bond.",
     ),
     "narrator_british_clear": VoicePreset(
         id="narrator_british_clear",
@@ -244,6 +266,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="en-GB",
         gender="neutral",
         style="clear, precise",
+        sample_text="The Thames has witnessed two thousand years of London's history. Its waters carry secrets from Roman invaders to modern-day traders.",
     ),
 
     # Spanish (with culturally appropriate names)
@@ -255,6 +278,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="es-ES",
         gender="female",
         style="warm, expressive",
+        sample_text="El amor es como el viento: no puedes verlo, pero puedes sentirlo. Y cuando llega, lo cambia todo en su camino.",
     ),
     "narrator_spanish_male": VoicePreset(
         id="narrator_spanish_male",
@@ -264,6 +288,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="es-ES",
         gender="male",
         style="clear, engaging",
+        sample_text="La aventura comenzó cuando menos lo esperaba. Un mapa antiguo, una promesa olvidada, y el destino esperando al final del camino.",
     ),
 
     # French (with culturally appropriate names)
@@ -275,6 +300,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="fr-FR",
         gender="female",
         style="elegant, melodic",
+        sample_text="Paris s'éveillait doucement sous la lumière dorée du matin. Les rues pavées gardaient encore les secrets de la nuit.",
     ),
     "narrator_french_male": VoicePreset(
         id="narrator_french_male",
@@ -284,6 +310,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="fr-FR",
         gender="male",
         style="sophisticated, cultured",
+        sample_text="L'art de vivre, c'est comprendre que chaque moment est précieux. Le café du matin, la conversation avec un ami, le silence de la nuit.",
     ),
 
     # German (with culturally appropriate names)
@@ -295,6 +322,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="de-DE",
         gender="female",
         style="clear, precise",
+        sample_text="Die Berge erhoben sich majestätisch vor uns, ihre Gipfel in Wolken gehüllt. Hier begann unsere Reise ins Unbekannte.",
     ),
     "narrator_german_male": VoicePreset(
         id="narrator_german_male",
@@ -304,6 +332,7 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
         default_language_code="de-DE",
         gender="male",
         style="authoritative, clear",
+        sample_text="Die Geschichte lehrt uns, dass Veränderung unvermeidlich ist. Doch wie wir damit umgehen, definiert, wer wir werden.",
     ),
 
     # Hindi (with culturally appropriate names)
@@ -944,6 +973,7 @@ def get_voice_presets() -> List[Dict[str, Any]]:
             "default_language_code": preset.default_language_code,
             "gender": preset.gender,
             "style": preset.style,
+            "sample_text": preset.sample_text,
         }
         for preset in VOICE_PRESETS.values()
     ]

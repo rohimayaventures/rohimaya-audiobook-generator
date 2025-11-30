@@ -850,15 +850,22 @@ async def retry_job(
             detail=f"Can only retry failed or cancelled jobs (current status: {job['status']})"
         )
 
-    # Track retry count (no limit for now during development)
+    # Check retry limit (allow more manual retries than auto-retries)
+    MAX_MANUAL_RETRIES = 10
     current_retry_count = job.get("retry_count", 0)
+
+    if current_retry_count >= MAX_MANUAL_RETRIES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum retry limit ({MAX_MANUAL_RETRIES}) reached. Please create a new job."
+        )
 
     # Reset job for retry
     updates = {
         "status": "pending",
         "error_message": None,
         "progress_percent": 0.0,
-        "current_step": None,
+        "current_step": "Manual retry requested",
         "started_at": None,
         "completed_at": None,
         "retry_count": current_retry_count + 1,
@@ -2063,6 +2070,7 @@ class VoicePresetResponse(BaseModel):
     default_language_code: str
     gender: str
     style: str
+    sample_text: str = ""
 
 
 class LanguageInfo(BaseModel):

@@ -155,7 +155,7 @@ export default function LandingPage() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-af-card border border-af-card-border mb-8">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-sm text-white/80">Now with Google Drive integration</span>
+              <span className="text-sm text-white/80">25+ Premium AI Narrators in 10+ Languages</span>
             </div>
 
             {/* Logo/Brand */}
@@ -250,6 +250,21 @@ export default function LandingPage() {
                 icon="⚡"
                 title="Fast Processing"
                 description="Generate hours of audio content in minutes. Parallel processing ensures quick turnaround times."
+              />
+              <FeatureCard
+                icon="🌍"
+                title="Multilingual Support"
+                description="Create audiobooks in English, Spanish, French, German, Hindi, and more. Translate manuscripts with AI."
+              />
+              <FeatureCard
+                icon="📧"
+                title="Email Notifications"
+                description="Get notified when your audiobook is ready. Perfect for long productions - start the job and walk away."
+              />
+              <FeatureCard
+                icon="🔄"
+                title="Auto-Retry & Recovery"
+                description="Jobs automatically recover from temporary failures. Never lose progress on your audiobook."
               />
             </div>
           </div>

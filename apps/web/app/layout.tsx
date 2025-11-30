@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, Playfair_Display } from 'next/font/google'
 import { GradientBackground } from '@/components/ui'
+import { Toaster } from 'sonner'
 import '@/styles/globals.css'
 
 // Font configurations
@@ -63,6 +64,21 @@ export default function RootLayout({
         <GradientBackground>
           {children}
         </GradientBackground>
+        <Toaster
+          position="top-right"
+          expand={true}
+          richColors
+          closeButton
+          theme="dark"
+          toastOptions={{
+            style: {
+              background: 'rgba(30, 27, 75, 0.95)',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              backdropFilter: 'blur(12px)',
+            },
+            className: 'text-white',
+          }}
+        />
       </body>
     </html>
   )
