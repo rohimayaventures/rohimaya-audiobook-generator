@@ -31,6 +31,70 @@ Creates Supabase Storage buckets and RLS policies:
 - Users can only read/write/delete files in their own folders
 - Backend service (using service role key) can write to any user's audiobook folder
 
+### ✅ 0003_google_drive_tokens.sql
+Google Drive OAuth token storage:
+- Stores encrypted OAuth tokens per user
+- RLS policies for user-only access
+- Auto-updating timestamps
+
+### ✅ 0004_billing_interval.sql
+Adds billing interval support:
+- Monthly and yearly billing options
+
+### ✅ 0005_cover_art_columns.sql (DEPRECATED)
+Adds cover art generation fields (no longer used):
+- `generate_cover`, `cover_vibe`, `cover_description` - DEPRECATED
+- Also adds Findaway mode columns: `package_type`, `section_count`, `manifest_json`, `current_step`
+
+### ✅ 0006_multilingual_tts_columns.sql
+Adds multilingual TTS support:
+- `input_language_code` - Source language (e.g., "en-US", "hi-IN")
+- `output_language_code` - Target language for translation
+- `voice_preset_id` - Gemini voice preset ID
+- `emotion_style_prompt` - Emotion/style hints for TTS
+
+### ✅ 0007_chapters_table.sql
+Adds chapter workflow tables for Findaway-compliant audiobooks:
+
+**chapters table:**
+- Individual chapters extracted from manuscripts
+- Review/approval workflow before TTS
+- Segment types: opening_credits, front_matter, body_chapter, back_matter, closing_credits, retail_sample
+- Status: pending_review → approved → processing → completed
+
+**tracks table:**
+- Final audio tracks in playback order
+- Links to chapters
+- Export filename for Findaway
+
+**retail_samples table:**
+- AI-suggested and user-confirmed retail samples
+- Engagement, emotional intensity, spoiler risk scores
+
+**New job statuses:**
+- `parsing` - Manuscript being parsed into chapters
+- `chapters_pending` - Chapters extracted, awaiting user review
+- `chapters_approved` - User approved chapter order, ready for TTS
+
+### ✅ 0008_findaway_segment_order.sql
+Adds strict Findaway segment ordering:
+
+**segment_order column:**
+- 0 = Opening Credits (exactly one)
+- 1-9 = Front Matter (up to 9 items)
+- 10-79 = Body Chapters (up to 70 chapters)
+- 80-89 = Back Matter (up to 10 items)
+- 98 = Closing Credits (exactly one)
+- 99 = Retail Sample (exactly one)
+
+**Helper functions:**
+- `get_next_segment_order(job_id, segment_type)` - Get next available order
+- `validate_segment_order()` - Trigger to validate segment_order matches segment_type
+- `generate_default_credits_text(job_id, credit_type)` - Generate credits text
+
+**View:**
+- `job_segments_ordered` - All segments in correct Findaway order with export filenames
+
 ## Running Migrations
 
 ### Prerequisites
@@ -64,103 +128,147 @@ supabase migration list
    - Go to https://app.supabase.com/project/YOUR_PROJECT/sql
    - Paste SQL and click "Run"
 
+### Apply New Migrations (0007 and 0008)
+
+If you've already run migrations 0001-0006, you only need to run:
+
+```bash
+# Option 1: Supabase CLI
+supabase db push
+
+# Option 2: Manual (in order)
+# 1. Run 0007_chapters_table.sql
+# 2. Run 0008_findaway_segment_order.sql
+```
+
 ### Verify Migrations
 
-Check that tables and buckets were created:
+Check that new tables and columns were created:
 
 ```sql
--- Check tables exist
-SELECT table_name
-FROM information_schema.tables
-WHERE table_schema = 'public'
-AND table_name IN ('jobs', 'job_files');
+-- Check chapters table exists
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'chapters';
 
--- Check storage buckets
-SELECT * FROM storage.buckets
-WHERE name IN ('manuscripts', 'audiobooks');
+-- Check tracks table exists
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'tracks';
+
+-- Check segment_order column
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_name = 'chapters' AND column_name = 'segment_order';
+
+-- Check new job statuses work
+SELECT DISTINCT status FROM jobs;
 ```
 
 ## Schema Reference
 
-### jobs Table
+### jobs Table (Updated)
 ```sql
-id                  UUID PRIMARY KEY
-user_id             UUID NOT NULL
-status              TEXT (pending|processing|completed|failed|cancelled)
-mode                TEXT (single_voice|dual_voice)
-title               TEXT NOT NULL
-author              TEXT
-source_type         TEXT (upload|google_drive|paste|url)
-source_path         TEXT
-tts_provider        TEXT (openai|elevenlabs|inworld)
-narrator_voice_id   TEXT
-character_voice_id  TEXT (dual-voice only)
-character_name      TEXT (dual-voice only)
-audio_format        TEXT (mp3|wav|flac|m4b)
-audio_bitrate       TEXT
-audio_path          TEXT (nullable until completed)
-duration_seconds    INTEGER
-file_size_bytes     BIGINT
-total_chapters      INTEGER
-total_chunks        INTEGER
-chunks_completed    INTEGER
-progress_percent    NUMERIC(5,2)
-error_message       TEXT
-retry_count         INTEGER
-estimated_cost_usd  NUMERIC(10,4)
-actual_cost_usd     NUMERIC(10,4)
-created_at          TIMESTAMPTZ
-updated_at          TIMESTAMPTZ
-started_at          TIMESTAMPTZ
-completed_at        TIMESTAMPTZ
+id                    UUID PRIMARY KEY
+user_id               UUID NOT NULL
+status                TEXT (pending|parsing|chapters_pending|chapters_approved|processing|completed|failed|cancelled)
+mode                  TEXT (single_voice|dual_voice|findaway|multi_character)
+title                 TEXT NOT NULL
+author                TEXT
+-- TTS settings
+tts_provider          TEXT (openai|google)
+narrator_voice_id     TEXT
+input_language_code   TEXT
+output_language_code  TEXT
+voice_preset_id       TEXT
+emotion_style_prompt  TEXT
+-- Chapter workflow
+chapters_parsed_at    TIMESTAMPTZ
+chapters_approved_at  TIMESTAMPTZ
+-- Credits
+narrator_name         TEXT
+has_opening_credits   BOOLEAN DEFAULT TRUE
+has_closing_credits   BOOLEAN DEFAULT TRUE
+author_name           TEXT
+opening_credits_text  TEXT
+closing_credits_text  TEXT
+retail_sample_confirmed BOOLEAN DEFAULT FALSE
+-- ... other fields
 ```
 
-### job_files Table
+### chapters Table
+```sql
+id                      UUID PRIMARY KEY
+job_id                  UUID REFERENCES jobs(id)
+chapter_index           INTEGER (final playback order)
+source_order            INTEGER (original manuscript order)
+title                   TEXT
+text_content            TEXT
+segment_type            TEXT (opening_credits|front_matter|body_chapter|back_matter|closing_credits|retail_sample)
+segment_order           INTEGER (Findaway order: 0, 1-9, 10-79, 80-89, 98, 99)
+display_title           TEXT
+status                  TEXT (pending_review|approved|excluded|processing|completed|failed)
+word_count              INTEGER
+estimated_duration_seconds INTEGER
+audio_path              TEXT
+audio_duration_seconds  INTEGER
+audio_file_size_bytes   BIGINT
+created_at              TIMESTAMPTZ
+updated_at              TIMESTAMPTZ
+approved_at             TIMESTAMPTZ
+completed_at            TIMESTAMPTZ
+```
+
+### tracks Table
 ```sql
 id                 UUID PRIMARY KEY
-job_id             UUID REFERENCES jobs(id) ON DELETE CASCADE
-file_type          TEXT (chunk|chapter|final)
-chapter_number     INTEGER
-part_number        INTEGER
-audio_path         TEXT NOT NULL
-duration_seconds   NUMERIC(10,2)
+job_id             UUID REFERENCES jobs(id)
+chapter_id         UUID REFERENCES chapters(id)
+track_index        INTEGER
+title              TEXT
+segment_type       TEXT
+segment_order      INTEGER
+audio_path         TEXT
+duration_seconds   INTEGER
 file_size_bytes    BIGINT
-text_content       TEXT (enables regeneration)
-word_count         INTEGER
-voice_id           TEXT
-speaker_type       TEXT (narrator|character|single)
+export_filename    TEXT (e.g., "10_chapter_01.mp3")
 status             TEXT (pending|processing|completed|failed)
-error_message      TEXT
-created_at         TIMESTAMPTZ
-completed_at       TIMESTAMPTZ
 ```
 
-## Storage Structure
+### retail_samples Table
+```sql
+id                        UUID PRIMARY KEY
+job_id                    UUID REFERENCES jobs(id)
+source_chapter_id         UUID REFERENCES chapters(id)
+sample_text               TEXT
+word_count                INTEGER
+engagement_score          NUMERIC(3,2)
+emotional_intensity_score NUMERIC(3,2)
+spoiler_risk_score        NUMERIC(3,2)
+overall_score             NUMERIC(3,2)
+is_auto_suggested         BOOLEAN
+is_user_confirmed         BOOLEAN
+is_final                  BOOLEAN
+user_edited_text          TEXT
+candidate_rank            INTEGER
+```
 
-### Manuscripts Bucket
-```
-manuscripts/
-└── {user_id}/
-    ├── great_adventure.txt
-    ├── mystery_novel.docx
-    └── fantasy_epic.pdf
-```
+## Findaway Export Filename Convention
 
-### Audiobooks Bucket
+Files are named to sort alphabetically in correct playback order:
+
 ```
-audiobooks/
-└── {user_id}/
-    └── {job_id}/
-        ├── chunks/
-        │   ├── ch1_part1.mp3
-        │   ├── ch1_part2.mp3
-        │   └── ...
-        ├── chapters/
-        │   ├── CHAPTER_01.mp3
-        │   ├── CHAPTER_02.mp3
-        │   └── ...
-        └── final/
-            └── Great_Adventure_COMPLETE.mp3
+00_opening_credits.mp3
+01_front_matter_01.mp3
+02_front_matter_02.mp3
+10_chapter_01.mp3
+11_chapter_02.mp3
+...
+79_chapter_70.mp3
+80_back_matter_01.mp3
+...
+98_closing_credits.mp3
+99_retail_sample.mp3
 ```
 
 ## Environment Variables
@@ -202,6 +310,15 @@ ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 ### Permission denied errors
 Verify you're using the correct Supabase service role key for backend operations.
 
+### Segment order validation errors
+The trigger `validate_segment_order` enforces strict ranges. If you get errors:
+- `opening_credits` must have segment_order = 0
+- `front_matter` must have segment_order between 1-9
+- `body_chapter` must have segment_order between 10-79
+- `back_matter` must have segment_order between 80-89
+- `closing_credits` must have segment_order = 98
+- `retail_sample` must have segment_order = 99
+
 ---
-**Last Updated:** 2025-11-22
-**Migration Version:** 0002
+**Last Updated:** 2025-11-29
+**Migration Version:** 0008
