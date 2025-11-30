@@ -42,6 +42,9 @@ boto3==1.34.0
 # Stripe Billing
 stripe==7.10.0
 
+# Rate Limiting
+slowapi==0.1.9
+
 # Google Drive Integration
 google-auth==2.27.0
 google-auth-oauthlib==1.2.0

@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from enum import Enum
 
 from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File, Form, Request
 from fastapi.responses import JSONResponse
@@ -34,6 +35,16 @@ from .google_drive import (
     refresh_access_token,
     is_google_drive_configured,
 )
+from .rate_limiter import (
+    limiter,
+    rate_limit_exception_handler,
+    check_job_creation_limit,
+    get_job_creation_remaining,
+    is_rate_limiting_enabled,
+    RATE_LIMITS,
+)
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 # Load environment variables (Railway provides these directly, .env is for local dev)
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
@@ -62,6 +73,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate Limiting - add limiter to app state and exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # ============================================================================
@@ -382,6 +397,57 @@ async def health_check(detailed: bool = False) -> HealthResponse:
 
 
 # ============================================================================
+# RATE LIMIT STATUS ENDPOINT
+# ============================================================================
+
+class RateLimitStatusResponse(BaseModel):
+    """Rate limit status for current user"""
+    plan: str
+    requests_per_minute: int
+    jobs_per_hour: Optional[int]
+    jobs_remaining_this_hour: Optional[int]
+    rate_limiting_enabled: bool
+
+
+@app.get(
+    "/rate-limit/status",
+    response_model=RateLimitStatusResponse,
+    summary="Get Rate Limit Status",
+    tags=["Rate Limiting"],
+)
+async def get_rate_limit_status(
+    user_id: str = Depends(get_current_user)
+) -> RateLimitStatusResponse:
+    """
+    Get current rate limit status for the authenticated user.
+
+    Returns the user's plan limits and remaining quota.
+    """
+    # Get user's billing info
+    billing_info = db.get_user_billing(user_id)
+    plan_id = billing_info.get("plan_id", "free") if billing_info else "free"
+
+    # Check if admin
+    user_info = db.get_user(user_id)
+    if is_user_admin(user_info):
+        plan_id = "admin"
+
+    # Get limits for plan
+    limits = RATE_LIMITS.get(plan_id, RATE_LIMITS["free"])
+
+    # Get remaining job quota
+    jobs_remaining = get_job_creation_remaining(user_id, plan_id)
+
+    return RateLimitStatusResponse(
+        plan=plan_id,
+        requests_per_minute=limits["requests_per_minute"],
+        jobs_per_hour=limits["jobs_per_hour"],
+        jobs_remaining_this_hour=jobs_remaining,
+        rate_limiting_enabled=is_rate_limiting_enabled(),
+    )
+
+
+# ============================================================================
 # JOB MANAGEMENT ENDPOINTS
 # ============================================================================
 
@@ -392,14 +458,17 @@ async def health_check(detailed: bool = False) -> HealthResponse:
     summary="Create Audiobook Job",
     tags=["Jobs"],
 )
+@limiter.limit("5/minute")  # Additional limit on job creation
 async def create_job(
     request: JobCreateRequest,
+    http_request: Request,
     user_id: str = Depends(get_current_user)
 ) -> JobResponse:
     """
     Create a new audiobook generation job
 
     Requires authentication. The job will be queued for processing.
+    Rate limited: 5 jobs per minute, with additional hourly limits by plan.
     """
     # Validate source_type
     if request.source_type not in ["upload", "paste", "google_drive"]:
@@ -3107,6 +3176,258 @@ async def run_multilingual_test(
         logger.error(f"[ML-TEST] Error: {e}")
 
     return response
+
+
+# ============================================================================
+# ANALYTICS DASHBOARD
+# ============================================================================
+
+class AnalyticsTimeRange(str, Enum):
+    """Time range for analytics queries."""
+    day = "day"
+    week = "week"
+    month = "month"
+    year = "year"
+    all_time = "all_time"
+
+
+class AnalyticsResponse(BaseModel):
+    """Analytics dashboard response."""
+    time_range: str
+
+    # Usage Statistics
+    total_jobs: int = 0
+    completed_jobs: int = 0
+    failed_jobs: int = 0
+    pending_jobs: int = 0
+    success_rate: float = 0.0
+
+    # Audio Statistics
+    total_audio_minutes: float = 0.0
+    total_words_processed: int = 0
+    avg_audio_duration_minutes: float = 0.0
+
+    # Processing Statistics
+    avg_processing_time_seconds: float = 0.0
+    min_processing_time_seconds: float = 0.0
+    max_processing_time_seconds: float = 0.0
+
+    # Popular Voices
+    popular_voices: List[Dict[str, Any]] = []
+
+    # Language Statistics
+    popular_input_languages: List[Dict[str, Any]] = []
+    popular_output_languages: List[Dict[str, Any]] = []
+
+    # Error Statistics
+    error_rate: float = 0.0
+    common_errors: List[Dict[str, Any]] = []
+
+    # Trends (for charts)
+    jobs_by_day: List[Dict[str, Any]] = []
+    jobs_by_status: Dict[str, int] = {}
+
+    # User Statistics (admin only)
+    unique_users: int = 0
+    new_users_in_period: int = 0
+
+
+@app.get("/analytics", response_model=AnalyticsResponse)
+async def get_analytics(
+    time_range: AnalyticsTimeRange = AnalyticsTimeRange.month,
+    user_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get analytics dashboard data.
+
+    - Regular users can only see their own analytics (user_id is ignored)
+    - Admins can see all analytics or filter by user_id
+    """
+    db = SupabaseClient()
+
+    # Determine if user is admin
+    is_admin = False
+    try:
+        profile = db.client.table("profiles").select("subscription_plan").eq("id", current_user["id"]).single().execute()
+        is_admin = profile.data.get("subscription_plan") == "admin" if profile.data else False
+    except Exception:
+        pass
+
+    # Non-admins can only see their own data
+    if not is_admin:
+        user_id = current_user["id"]
+
+    # Calculate date range
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+
+    if time_range == AnalyticsTimeRange.day:
+        start_date = now - timedelta(days=1)
+    elif time_range == AnalyticsTimeRange.week:
+        start_date = now - timedelta(weeks=1)
+    elif time_range == AnalyticsTimeRange.month:
+        start_date = now - timedelta(days=30)
+    elif time_range == AnalyticsTimeRange.year:
+        start_date = now - timedelta(days=365)
+    else:  # all_time
+        start_date = datetime(2020, 1, 1)  # Far enough back
+
+    start_date_str = start_date.isoformat()
+
+    try:
+        # Build query
+        query = db.client.table("jobs").select("*")
+
+        if user_id:
+            query = query.eq("user_id", user_id)
+
+        query = query.gte("created_at", start_date_str)
+
+        result = query.execute()
+        jobs = result.data or []
+
+        # Calculate statistics
+        total_jobs = len(jobs)
+        completed_jobs = len([j for j in jobs if j.get("status") == "completed"])
+        failed_jobs = len([j for j in jobs if j.get("status") == "failed"])
+        pending_jobs = len([j for j in jobs if j.get("status") in ["pending", "processing", "parsing", "chapters_pending", "chapters_approved"]])
+
+        success_rate = (completed_jobs / total_jobs * 100) if total_jobs > 0 else 0.0
+        error_rate = (failed_jobs / total_jobs * 100) if total_jobs > 0 else 0.0
+
+        # Audio statistics
+        total_audio_seconds = sum(j.get("duration_seconds") or 0 for j in jobs if j.get("status") == "completed")
+        total_audio_minutes = total_audio_seconds / 60
+
+        total_words = sum(j.get("word_count") or 0 for j in jobs)
+
+        avg_audio_minutes = (total_audio_minutes / completed_jobs) if completed_jobs > 0 else 0.0
+
+        # Processing time statistics
+        processing_times = []
+        for job in jobs:
+            if job.get("status") == "completed" and job.get("created_at") and job.get("completed_at"):
+                try:
+                    created = datetime.fromisoformat(job["created_at"].replace("Z", "+00:00"))
+                    completed = datetime.fromisoformat(job["completed_at"].replace("Z", "+00:00"))
+                    processing_times.append((completed - created).total_seconds())
+                except Exception:
+                    pass
+
+        avg_processing = sum(processing_times) / len(processing_times) if processing_times else 0.0
+        min_processing = min(processing_times) if processing_times else 0.0
+        max_processing = max(processing_times) if processing_times else 0.0
+
+        # Popular voices
+        voice_counts = {}
+        for job in jobs:
+            voice = job.get("voice_preset_id") or job.get("voice_id") or "default"
+            voice_counts[voice] = voice_counts.get(voice, 0) + 1
+
+        popular_voices = [
+            {"voice_id": v, "count": c, "percentage": round(c / total_jobs * 100, 1) if total_jobs > 0 else 0}
+            for v, c in sorted(voice_counts.items(), key=lambda x: -x[1])[:10]
+        ]
+
+        # Language statistics
+        input_lang_counts = {}
+        output_lang_counts = {}
+        for job in jobs:
+            input_lang = job.get("input_language_code") or "en"
+            output_lang = job.get("output_language_code") or "en"
+            input_lang_counts[input_lang] = input_lang_counts.get(input_lang, 0) + 1
+            output_lang_counts[output_lang] = output_lang_counts.get(output_lang, 0) + 1
+
+        popular_input_languages = [
+            {"language": lang, "count": c, "percentage": round(c / total_jobs * 100, 1) if total_jobs > 0 else 0}
+            for lang, c in sorted(input_lang_counts.items(), key=lambda x: -x[1])[:5]
+        ]
+
+        popular_output_languages = [
+            {"language": lang, "count": c, "percentage": round(c / total_jobs * 100, 1) if total_jobs > 0 else 0}
+            for lang, c in sorted(output_lang_counts.items(), key=lambda x: -x[1])[:5]
+        ]
+
+        # Common errors
+        error_counts = {}
+        for job in jobs:
+            if job.get("status") == "failed" and job.get("error_message"):
+                error_msg = job["error_message"][:100]  # Truncate
+                error_counts[error_msg] = error_counts.get(error_msg, 0) + 1
+
+        common_errors = [
+            {"error": e, "count": c}
+            for e, c in sorted(error_counts.items(), key=lambda x: -x[1])[:5]
+        ]
+
+        # Jobs by day (for charts)
+        jobs_by_day_dict = {}
+        for job in jobs:
+            if job.get("created_at"):
+                try:
+                    day = job["created_at"][:10]  # YYYY-MM-DD
+                    jobs_by_day_dict[day] = jobs_by_day_dict.get(day, 0) + 1
+                except Exception:
+                    pass
+
+        jobs_by_day = [
+            {"date": d, "count": c}
+            for d, c in sorted(jobs_by_day_dict.items())[-30:]  # Last 30 days
+        ]
+
+        # Jobs by status
+        jobs_by_status = {
+            "completed": completed_jobs,
+            "failed": failed_jobs,
+            "pending": pending_jobs,
+        }
+
+        # User statistics (admin only)
+        unique_users = 0
+        new_users_in_period = 0
+        if is_admin:
+            unique_user_ids = set(j.get("user_id") for j in jobs if j.get("user_id"))
+            unique_users = len(unique_user_ids)
+
+            # New users (users whose first job is in this period)
+            try:
+                all_users_result = db.client.table("profiles").select("id, created_at").execute()
+                if all_users_result.data:
+                    new_users_in_period = len([
+                        u for u in all_users_result.data
+                        if u.get("created_at") and u["created_at"] >= start_date_str
+                    ])
+            except Exception:
+                pass
+
+        return AnalyticsResponse(
+            time_range=time_range.value,
+            total_jobs=total_jobs,
+            completed_jobs=completed_jobs,
+            failed_jobs=failed_jobs,
+            pending_jobs=pending_jobs,
+            success_rate=round(success_rate, 1),
+            total_audio_minutes=round(total_audio_minutes, 1),
+            total_words_processed=total_words,
+            avg_audio_duration_minutes=round(avg_audio_minutes, 1),
+            avg_processing_time_seconds=round(avg_processing, 1),
+            min_processing_time_seconds=round(min_processing, 1),
+            max_processing_time_seconds=round(max_processing, 1),
+            popular_voices=popular_voices,
+            popular_input_languages=popular_input_languages,
+            popular_output_languages=popular_output_languages,
+            error_rate=round(error_rate, 1),
+            common_errors=common_errors,
+            jobs_by_day=jobs_by_day,
+            jobs_by_status=jobs_by_status,
+            unique_users=unique_users,
+            new_users_in_period=new_users_in_period,
+        )
+
+    except Exception as e:
+        logger.error(f"Analytics error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch analytics: {str(e)}")
 
 
 # ============================================================================

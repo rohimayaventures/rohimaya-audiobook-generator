@@ -6,6 +6,7 @@ interface GlassCardProps {
   className?: string
   variant?: 'default' | 'feature' | 'compact'
   glow?: boolean
+  'data-tour'?: string
 }
 
 /**
@@ -18,9 +19,11 @@ export function GlassCard({
   className,
   variant = 'default',
   glow = false,
+  'data-tour': dataTour,
 }: GlassCardProps) {
   return (
     <div
+      data-tour={dataTour}
       className={clsx(
         'glass transition-all duration-300',
         {

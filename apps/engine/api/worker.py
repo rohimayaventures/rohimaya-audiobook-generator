@@ -36,6 +36,12 @@ logger = logging.getLogger("worker")
 from .database import db
 from .email import send_job_completed_email, send_job_failed_email, is_email_configured
 
+# Import chapter parser
+from core.chapter_parser import split_into_chapters, clean_text
+
+# Words per minute for duration estimation (average narration speed)
+WORDS_PER_MINUTE = 150
+
 # Load environment variables (only for local development)
 # In production (Railway), env vars are set directly
 env_path = Path(__file__).parent.parent.parent.parent / "env" / ".env"
@@ -459,6 +465,108 @@ async def send_job_notification(job_id: str, job: Dict[str, Any], success: bool,
         logger.error(f"[EMAIL] Failed to send notification email: {e}")
 
 
+async def parse_and_save_chapters(job_id: str, manuscript_text: str) -> List[Dict[str, Any]]:
+    """
+    Parse manuscript into chapters and save them to the database.
+
+    This function:
+    1. Uses chapter_parser to detect chapters
+    2. Saves each chapter to the 'chapters' table
+    3. Returns list of saved chapter records
+
+    Args:
+        job_id: Job UUID
+        manuscript_text: Full manuscript text
+
+    Returns:
+        List of chapter records saved to database
+    """
+    import uuid
+
+    logger.info(f"[PARSE] {job_id} - Parsing manuscript into chapters...")
+
+    # Parse chapters using the chapter parser
+    parsed_chapters = split_into_chapters(manuscript_text)
+
+    if not parsed_chapters:
+        logger.warning(f"[PARSE] {job_id} - No chapters detected, creating single chapter")
+        # Create a single chapter for the entire manuscript
+        text = clean_text(manuscript_text)
+        word_count = len(text.split())
+        parsed_chapters = [{
+            "index": 1,
+            "source_order": 0,
+            "chapter_index": 0,
+            "title": "Full Manuscript",
+            "text": text,
+            "segment_type": "body_chapter",
+            "pattern_type": "single_chapter",
+            "word_count": word_count,
+            "character_count": len(text),
+        }]
+
+    logger.info(f"[PARSE] {job_id} - Detected {len(parsed_chapters)} chapter(s)")
+
+    # Save each chapter to database
+    saved_chapters = []
+
+    for chapter in parsed_chapters:
+        word_count = chapter.get("word_count", 0)
+        # Estimate duration: ~150 words per minute for narration
+        estimated_duration = int((word_count / WORDS_PER_MINUTE) * 60)
+
+        chapter_data = {
+            "id": str(uuid.uuid4()),
+            "job_id": job_id,
+            "source_order": chapter["source_order"],
+            "chapter_index": chapter["chapter_index"],
+            "title": chapter["title"],
+            "display_title": chapter.get("title", f"Chapter {chapter['index']}"),
+            "text_content": chapter["text"],
+            "segment_type": chapter.get("segment_type", "body_chapter"),
+            "word_count": word_count,
+            "character_count": chapter.get("character_count", len(chapter.get("text", ""))),
+            "estimated_duration_seconds": estimated_duration,
+            "status": "pending_review",
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+        try:
+            result = db.client.table("chapters").insert(chapter_data).execute()
+            if result.data:
+                saved_chapters.append(result.data[0])
+                logger.debug(f"[PARSE] {job_id} - Saved chapter: {chapter['title']} ({word_count} words)")
+        except Exception as e:
+            logger.error(f"[PARSE] {job_id} - Failed to save chapter {chapter['title']}: {e}")
+            raise
+
+    logger.info(f"[PARSE] {job_id} - Successfully saved {len(saved_chapters)} chapters to database")
+    return saved_chapters
+
+
+def get_approved_chapters(job_id: str) -> List[Dict[str, Any]]:
+    """
+    Get all approved chapters for a job, ordered by chapter_index.
+
+    Args:
+        job_id: Job UUID
+
+    Returns:
+        List of approved chapter records
+    """
+    try:
+        result = db.client.table("chapters").select("*").eq(
+            "job_id", job_id
+        ).eq(
+            "status", "approved"
+        ).order("chapter_index").execute()
+
+        return result.data or []
+    except Exception as e:
+        logger.error(f"[CHAPTERS] Failed to get approved chapters for {job_id}: {e}")
+        return []
+
+
 async def enqueue_job(job_id: str):
     """
     Add job to processing queue
@@ -477,12 +585,20 @@ async def process_job(job_id: str):
     Args:
         job_id: Job UUID
 
-    This function:
+    This function handles a two-phase workflow:
+
+    Phase 1 (pending → chapters_pending):
     1. Fetches job from database
     2. Downloads manuscript from storage
-    3. Runs appropriate pipeline (single-voice or dual-voice)
-    4. Uploads generated audio to storage
-    5. Updates job status to completed or failed
+    3. Parses manuscript into chapters
+    4. Saves chapters to database
+    5. Updates job status to 'chapters_pending' (waits for user approval)
+
+    Phase 2 (chapters_approved → processing → completed):
+    1. Gets approved chapters from database
+    2. Runs TTS pipeline for each chapter
+    3. Uploads generated audio to storage
+    4. Updates job status to completed
     """
     output_dir = None
     job = None  # Initialize for email notification in except block
@@ -502,29 +618,98 @@ async def process_job(job_id: str):
             logger.info(f"[JOB] {job_id} - Already cancelled, skipping")
             return
 
-        logger.info(f"[JOB] {job_id} - Starting: {job['title']}")
+        job_status = job["status"]
+        logger.info(f"[JOB] {job_id} - Starting: {job['title']} (status: {job_status})")
         logger.info(f"[JOB] {job_id} - Mode: {job['mode']}, Provider: {job['tts_provider']}, Voice: {job.get('narrator_voice_id')}")
+
+        # ======================================================================
+        # PHASE 1: PARSE CHAPTERS (pending → chapters_pending)
+        # ======================================================================
+        if job_status == "pending":
+            logger.info(f"[JOB] {job_id} - Phase 1: Parsing manuscript into chapters")
+
+            # Update status to parsing
+            db.update_job(job_id, {
+                "status": "parsing",
+                "started_at": datetime.utcnow().isoformat(),
+                "progress_percent": 5.0,
+                "current_step": "Downloading manuscript...",
+            })
+
+            # Download manuscript from storage
+            source_path = job.get("source_path")
+            if not source_path:
+                raise ValueError("No source_path found for job - manuscript not uploaded")
+
+            logger.info(f"[JOB] {job_id} - Downloading manuscript from: {source_path}")
+            manuscript_data = db.download_manuscript(source_path)
+
+            # Extract text from file (handles DOCX, PDF, TXT, MD, HTML, EPUB)
+            db.update_job(job_id, {
+                "progress_percent": 15.0,
+                "current_step": "Extracting text from file...",
+            })
+            manuscript_text = extract_text_from_file(manuscript_data, source_path)
+
+            word_count = len(manuscript_text.split())
+            logger.info(f"[JOB] {job_id} - Manuscript extracted: {len(manuscript_text)} chars, ~{word_count} words")
+
+            # Parse chapters and save to database
+            db.update_job(job_id, {
+                "progress_percent": 30.0,
+                "current_step": "Detecting chapters...",
+            })
+            chapters = await parse_and_save_chapters(job_id, manuscript_text)
+
+            # Calculate totals
+            total_words = sum(ch.get("word_count", 0) for ch in chapters)
+            total_duration = sum(ch.get("estimated_duration_seconds", 0) for ch in chapters)
+
+            # Update job to chapters_pending status
+            # Note: total_chapters is the only extra column that exists in the jobs table
+            db.update_job(job_id, {
+                "status": "chapters_pending",
+                "progress_percent": 50.0,
+                "current_step": f"Waiting for chapter review ({len(chapters)} chapters, ~{total_duration // 60}min)",
+                "total_chapters": len(chapters),
+            })
+
+            logger.info(f"[JOB] {job_id} - Phase 1 complete: {len(chapters)} chapters detected")
+            logger.info(f"[JOB] {job_id} - Waiting for user to review and approve chapters")
+
+            # Phase 1 complete - job will wait for user to approve chapters
+            return
+
+        # ======================================================================
+        # PHASE 2: GENERATE AUDIO (chapters_approved → processing → completed)
+        # ======================================================================
+        if job_status != "chapters_approved":
+            logger.warning(f"[JOB] {job_id} - Unexpected status '{job_status}', skipping")
+            return
+
+        logger.info(f"[JOB] {job_id} - Phase 2: Generating audio from approved chapters")
 
         # Update status to processing
         db.update_job(job_id, {
             "status": "processing",
-            "started_at": datetime.utcnow().isoformat(),
             "progress_percent": 5.0,
+            "current_step": "Starting audio generation...",
         })
 
-        # Download manuscript from storage
-        source_path = job.get("source_path")
-        if not source_path:
-            raise ValueError("No source_path found for job - manuscript not uploaded")
+        # Get approved chapters from database
+        approved_chapters = get_approved_chapters(job_id)
+        if not approved_chapters:
+            raise ValueError("No approved chapters found for this job")
 
-        logger.info(f"[JOB] {job_id} - Downloading manuscript from: {source_path}")
-        manuscript_data = db.download_manuscript(source_path)
+        logger.info(f"[JOB] {job_id} - Found {len(approved_chapters)} approved chapters")
 
-        # Extract text from file (handles DOCX, PDF, TXT, MD, HTML, EPUB)
-        manuscript_text = extract_text_from_file(manuscript_data, source_path)
+        # Build manuscript text from approved chapters in order
+        manuscript_text = "\n\n".join(
+            ch.get("text_content", "") for ch in approved_chapters
+        )
 
         word_count = len(manuscript_text.split())
-        logger.info(f"[JOB] {job_id} - Manuscript downloaded: {len(manuscript_text)} chars, ~{word_count} words")
+        logger.info(f"[JOB] {job_id} - Combined manuscript: {len(manuscript_text)} chars, ~{word_count} words")
 
         # Update progress
         db.update_job(job_id, {"progress_percent": 10.0})

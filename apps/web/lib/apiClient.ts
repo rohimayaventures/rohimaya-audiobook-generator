@@ -685,3 +685,80 @@ export async function getTrackDownloadUrl(
 ): Promise<TrackDownloadUrl> {
   return fetchApi<TrackDownloadUrl>(`/jobs/${jobId}/tracks/${trackId}/download`)
 }
+
+// ============================================
+// Analytics
+// ============================================
+
+export type AnalyticsTimeRange = 'day' | 'week' | 'month' | 'year' | 'all_time'
+
+export interface AnalyticsData {
+  time_range: string
+
+  // Usage Statistics
+  total_jobs: number
+  completed_jobs: number
+  failed_jobs: number
+  pending_jobs: number
+  success_rate: number
+
+  // Audio Statistics
+  total_audio_minutes: number
+  total_words_processed: number
+  avg_audio_duration_minutes: number
+
+  // Processing Statistics
+  avg_processing_time_seconds: number
+  min_processing_time_seconds: number
+  max_processing_time_seconds: number
+
+  // Popular Voices
+  popular_voices: Array<{
+    voice_id: string
+    count: number
+    percentage: number
+  }>
+
+  // Language Statistics
+  popular_input_languages: Array<{
+    language: string
+    count: number
+    percentage: number
+  }>
+  popular_output_languages: Array<{
+    language: string
+    count: number
+    percentage: number
+  }>
+
+  // Error Statistics
+  error_rate: number
+  common_errors: Array<{
+    error: string
+    count: number
+  }>
+
+  // Trends
+  jobs_by_day: Array<{
+    date: string
+    count: number
+  }>
+  jobs_by_status: {
+    completed: number
+    failed: number
+    pending: number
+  }
+
+  // User Statistics (admin only)
+  unique_users: number
+  new_users_in_period: number
+}
+
+/**
+ * Get analytics dashboard data
+ */
+export async function getAnalytics(
+  timeRange: AnalyticsTimeRange = 'month'
+): Promise<AnalyticsData> {
+  return fetchApi<AnalyticsData>(`/analytics?time_range=${timeRange}`)
+}

@@ -26,6 +26,7 @@ import {
 } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 import { getBillingInfo, type BillingInfo, PLANS } from '@/lib/billing'
+import { OnboardingTour } from '@/components/onboarding/OnboardingTour'
 
 // Fallback voices (used if API voice library fails to load)
 const FALLBACK_VOICES = [
@@ -519,6 +520,7 @@ function DashboardContent() {
             {inputMode === 'file' && (
               <div
                 {...getRootProps()}
+                data-tour="upload-section"
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
                   isDragActive
                     ? 'border-af-purple bg-af-purple/10'
@@ -673,7 +675,7 @@ function DashboardContent() {
             </div>
 
             {/* Language & Voice Section */}
-            <div className="mt-6 p-4 rounded-lg bg-af-card border border-af-card-border">
+            <div className="mt-6 p-4 rounded-lg bg-af-card border border-af-card-border" data-tour="language-options">
               <h4 className="text-sm font-semibold text-white/90 mb-4">Language & Voice</h4>
 
               {/* Input Language */}
@@ -715,7 +717,7 @@ function DashboardContent() {
               </div>
 
               {/* Voice Preset */}
-              <div className="mb-4">
+              <div className="mb-4" data-tour="voice-selection">
                 <label className="block text-sm font-medium text-white/80 mb-2">
                   Narrator Voice
                 </label>
@@ -819,18 +821,20 @@ function DashboardContent() {
             )}
 
             {/* Submit button */}
-            <PrimaryButton
-              onClick={handleCreateJob}
-              loading={creating}
-              disabled={creating}
-              className="w-full mt-6"
-            >
-              Generate Now
-            </PrimaryButton>
+            <div data-tour="create-button">
+              <PrimaryButton
+                onClick={handleCreateJob}
+                loading={creating}
+                disabled={creating}
+                className="w-full mt-6"
+              >
+                Generate Now
+              </PrimaryButton>
+            </div>
           </GlassCard>
 
           {/* Recent Jobs */}
-          <GlassCard title="Recent jobs">
+          <GlassCard title="Recent jobs" data-tour="recent-jobs">
             {loadingJobs ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -896,6 +900,7 @@ export default function DashboardPage() {
   return (
     <AuthWrapper>
       <DashboardContent />
+      <OnboardingTour tourType="dashboard" />
     </AuthWrapper>
   )
 }

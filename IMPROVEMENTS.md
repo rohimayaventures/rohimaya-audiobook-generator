@@ -178,25 +178,155 @@ POST /jobs/{job_id}/retry
 
 ---
 
-## Phase 3: Planned Features (Not Yet Implemented)
+## Chapter Review Workflow (NEW - Production Audit)
 
-These features are recommended for future development:
+### Two-Phase Job Processing
+**File:** `apps/engine/api/worker.py`
 
-### API Rate Limiting
-- Per-user rate limits
-- Tiered limits based on subscription
-- Prevent abuse
+The job processing has been refactored into a two-phase workflow:
 
-### Onboarding Tour
-- Guided walkthrough for new users
-- Highlight key features
-- Interactive tooltips
+**Phase 1: Parse Chapters (pending → chapters_pending)**
+1. Download manuscript from storage
+2. Extract text from file (DOCX, PDF, TXT, MD, HTML, EPUB)
+3. Parse into chapters using `split_into_chapters()`
+4. Save chapters to `chapters` table in database
+5. Set job status to `chapters_pending` (waits for user approval)
 
-### Analytics Dashboard
-- Usage statistics
-- Popular voices
-- Processing times
-- Error rates
+**Phase 2: Generate Audio (chapters_approved → processing → completed)**
+1. User reviews and approves chapters via Chapter Review UI
+2. Worker gets approved chapters from database
+3. Runs TTS pipeline on combined chapter text
+4. Uploads audio to storage
+5. Updates job status to `completed`
+
+### Job Status Flow
+```
+pending → parsing → chapters_pending → chapters_approved → processing → completed
+                        ↓
+                   (user review)
+```
+
+### Chapter Review UI
+**File:** `apps/web/components/chapters/ChapterReview.tsx`
+
+Features:
+- Drag-and-drop chapter reordering
+- Segment type classification (Front Matter, Chapter, Back Matter)
+- Include/exclude individual chapters
+- Word count and estimated duration display
+- Chapter text preview
+- "Approve & Generate Audio" button
+
+### Chapter Parser Patterns
+**File:** `apps/engine/core/chapter_parser.py`
+
+Detected patterns:
+- `CHAPTER 1`, `Chapter 1`, `chapter 1` (numbers)
+- `Chapter One`, `Chapter Two` (word numbers up to 20)
+- `CHAPTER I`, `Chapter II` (Roman numerals)
+- `Part I`, `Part 1`, `Part One`
+- `Prologue`, `Epilogue`
+- `Foreword`, `Preface`, `Introduction`, `Dedication`
+- `Afterword`, `Acknowledgments`, `About the Author`
+- `Glossary`, `Appendix`
+
+### Database Changes
+New columns used in `jobs` table:
+- `status`: Added `parsing`, `chapters_pending`, `chapters_approved`
+- `total_chapters`: Count of detected chapters
+- `current_step`: Human-readable progress message
+
+Chapters are stored in `chapters` table with:
+- `chapter_index`: Final playback order
+- `source_order`: Original manuscript position
+- `segment_type`: front_matter, body_chapter, back_matter
+- `estimated_duration_seconds`: Based on word count (~150 wpm)
+
+---
+
+## Phase 3: Production Features (IMPLEMENTED)
+
+### 1. API Rate Limiting
+**File:** `apps/engine/api/rate_limiter.py`
+
+**Features:**
+- Per-user rate limits based on subscription tier
+- In-memory storage (Redis recommended for production)
+- Configurable limits per plan
+
+**Rate Limits by Plan:**
+| Plan | Requests/Minute | Jobs/Hour |
+|------|-----------------|-----------|
+| Free | 10 | 2 |
+| Creator | 30 | 10 |
+| Author Pro | 60 | 30 |
+| Publisher | 120 | Unlimited |
+| Admin | 1000 | Unlimited |
+
+**Integration:**
+- Added `slowapi` dependency to requirements.txt
+- Rate limiter middleware in `main.py`
+- `/rate-limit/status` endpoint for checking current limits
+
+**Usage:**
+```python
+from api.rate_limiter import limiter
+
+@app.get("/endpoint")
+@limiter.limit("10/minute")
+async def my_endpoint(request: Request):
+    pass
+```
+
+### 2. Onboarding Tour
+**File:** `apps/web/components/onboarding/OnboardingTour.tsx`
+
+**Library:** react-joyride
+
+**Features:**
+- 5-step guided tour for new users
+- Highlights key dashboard features:
+  1. File upload area
+  2. Language options
+  3. Voice selection
+  4. Create button
+  5. Recent jobs section
+- Purple-themed styling matching AuthorFlow design
+- LocalStorage persistence (shows only once per user)
+- Utility functions: `resetTour()`, `hasTourCompleted()`, `markTourCompleted()`
+
+**Integration:**
+- Added `data-tour` attributes to dashboard elements
+- Dynamic import for SSR compatibility
+- Automatically starts for new users
+
+### 3. Analytics Dashboard
+**Backend:** `apps/engine/api/main.py` - `/analytics` endpoint
+**Frontend:** `apps/web/app/analytics/page.tsx`
+
+**Features:**
+- Time range filtering (day, week, month, year, all-time)
+- Usage statistics:
+  - Total jobs, completed, failed, pending
+  - Success rate and error rate
+  - Total audio minutes generated
+  - Words processed
+- Processing statistics:
+  - Average, min, max processing times
+  - Average audio duration
+- Popular voices breakdown
+- Language usage statistics (input/output)
+- Error analysis with common error patterns
+- Jobs over time chart
+- Admin-only: unique users and new user counts
+
+**Access Control:**
+- Regular users see only their own data
+- Admins can see platform-wide statistics
+
+**Navigation:**
+- Added "Analytics" link to main navbar
+- Accessible at `/analytics` route
 
 ---
 

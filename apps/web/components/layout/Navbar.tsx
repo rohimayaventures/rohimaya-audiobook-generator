@@ -41,6 +41,7 @@ export function Navbar({ user, onLogout }: NavbarProps) {
     ? [
         { href: '/dashboard', label: 'Dashboard' },
         { href: '/library', label: 'Library' },
+        { href: '/analytics', label: 'Analytics' },
         { href: '/pricing', label: 'Pricing' },
       ]
     : [
