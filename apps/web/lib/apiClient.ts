@@ -494,7 +494,9 @@ export interface Chapter {
   job_id: string
   chapter_index: number
   source_order: number
+  segment_order?: number
   title: string
+  display_title?: string
   text_content?: string
   character_count: number
   word_count: number
@@ -503,9 +505,12 @@ export interface Chapter {
   segment_type: 'opening_credits' | 'front_matter' | 'body_chapter' | 'back_matter' | 'closing_credits' | 'retail_sample'
   audio_path?: string
   audio_duration_seconds?: number
+  audio_file_size_bytes?: number
   error_message?: string
   created_at: string
   updated_at: string
+  approved_at?: string
+  completed_at?: string
 }
 
 export interface ChapterUpdatePayload {
@@ -578,6 +583,7 @@ export interface RetailSample {
   source_chapter_id?: string
   source_chapter_title?: string
   sample_text: string
+  user_edited_text?: string
   word_count: number
   character_count: number
   estimated_duration_seconds: number
@@ -589,6 +595,7 @@ export interface RetailSample {
   is_user_confirmed: boolean
   is_final: boolean
   audio_path?: string
+  candidate_rank?: number
   created_at: string
 }
 
@@ -609,6 +616,29 @@ export async function confirmRetailSample(
   return fetchApi<RetailSample>(`/jobs/${jobId}/retail-samples/confirm`, {
     method: 'POST',
     body: JSON.stringify({ sample_id: sampleId }),
+  })
+}
+
+/**
+ * Update a retail sample (e.g., edit text)
+ */
+export async function updateRetailSample(
+  jobId: string,
+  sampleId: string,
+  data: { user_edited_text?: string }
+): Promise<RetailSample> {
+  return fetchApi<RetailSample>(`/jobs/${jobId}/retail-samples/${sampleId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
+ * Regenerate retail sample candidates
+ */
+export async function regenerateRetailSamples(jobId: string): Promise<RetailSample[]> {
+  return fetchApi<RetailSample[]>(`/jobs/${jobId}/retail-samples/regenerate`, {
+    method: 'POST',
   })
 }
 

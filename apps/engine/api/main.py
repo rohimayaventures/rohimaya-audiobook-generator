@@ -1347,6 +1347,7 @@ class RetailSampleResponse(BaseModel):
     source_chapter_id: Optional[str] = None
     source_chapter_title: Optional[str] = None
     sample_text: str
+    user_edited_text: Optional[str] = None
     word_count: int = 0
     character_count: int = 0
     estimated_duration_seconds: int = 0
@@ -1358,6 +1359,7 @@ class RetailSampleResponse(BaseModel):
     is_user_confirmed: bool = False
     is_final: bool = False
     audio_path: Optional[str] = None
+    candidate_rank: Optional[int] = None
     created_at: str
 
 
@@ -1469,6 +1471,233 @@ async def confirm_retail_sample(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to confirm retail sample: {str(e)}"
+        )
+
+
+class RetailSampleUpdateRequest(BaseModel):
+    """Request to update a retail sample's edited text"""
+    user_edited_text: Optional[str] = None
+
+
+@app.patch(
+    "/jobs/{job_id}/retail-samples/{sample_id}",
+    response_model=RetailSampleResponse,
+    summary="Update Retail Sample",
+    tags=["Retail Samples"],
+)
+async def update_retail_sample(
+    job_id: str,
+    sample_id: str,
+    request: RetailSampleUpdateRequest,
+    user_id: str = Depends(get_current_user),
+) -> RetailSampleResponse:
+    """
+    Update a retail sample's user-edited text.
+
+    Allows users to edit the AI-suggested sample text before confirming.
+    """
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this job"
+        )
+
+    try:
+        # Build update data
+        update_data = {}
+        if request.user_edited_text is not None:
+            update_data["user_edited_text"] = request.user_edited_text
+            # Recalculate word count and duration based on edited text
+            word_count = len(request.user_edited_text.split())
+            update_data["word_count"] = word_count
+            update_data["estimated_duration_seconds"] = int(word_count / 150 * 60)
+
+        if not update_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No update data provided"
+            )
+
+        result = db.client.table("retail_samples").update(
+            update_data
+        ).eq("id", sample_id).eq("job_id", job_id).execute()
+
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Retail sample {sample_id} not found"
+            )
+
+        return RetailSampleResponse(**result.data[0])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update retail sample: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update retail sample: {str(e)}"
+        )
+
+
+@app.post(
+    "/jobs/{job_id}/retail-samples/regenerate",
+    response_model=List[RetailSampleResponse],
+    summary="Regenerate Retail Sample Candidates",
+    tags=["Retail Samples"],
+)
+async def regenerate_retail_samples(
+    job_id: str,
+    user_id: str = Depends(get_current_user),
+) -> List[RetailSampleResponse]:
+    """
+    Regenerate retail sample candidates for a job.
+
+    Clears existing non-final samples and uses AI to suggest new ones.
+    """
+    from agents import select_retail_sample_excerpt
+
+    job = db.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    if job["user_id"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this job"
+        )
+
+    # Check if there's already a confirmed final sample
+    if job.get("retail_sample_confirmed"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot regenerate samples after one has been confirmed"
+        )
+
+    try:
+        # Get chapters for this job to build manuscript structure
+        chapters_result = db.client.table("chapters").select("*").eq(
+            "job_id", job_id
+        ).order("source_order").execute()
+
+        chapters = chapters_result.data or []
+        if not chapters:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No chapters found for this job. Parse manuscript first."
+            )
+
+        # Build manuscript structure for the agent
+        manuscript_structure = {
+            "title": job.get("title", "Untitled"),
+            "author": job.get("author"),
+            "chapters": [
+                {
+                    "index": c.get("source_order", i + 1),
+                    "title": c.get("title", f"Chapter {i + 1}"),
+                    "text": c.get("text_content", ""),
+                }
+                for i, c in enumerate(chapters)
+            ]
+        }
+
+        # Get OpenAI API key
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="OpenAI API key not configured"
+            )
+
+        # Delete existing non-final samples
+        db.client.table("retail_samples").delete().eq(
+            "job_id", job_id
+        ).eq("is_final", False).execute()
+
+        # Generate new samples using the agent
+        # Generate 3 candidates with different styles
+        new_samples = []
+        styles = ["default", "spicy", "ultra_spicy"]
+
+        for i, style in enumerate(styles):
+            try:
+                result = select_retail_sample_excerpt(
+                    manuscript_structure=manuscript_structure,
+                    api_key=openai_api_key,
+                    target_duration_minutes=4.0,
+                    preferred_style=style,
+                    genre=job.get("genre"),
+                )
+
+                # Find the source chapter
+                source_chapter = None
+                for c in chapters:
+                    if c.get("source_order") == result.get("chapter_index"):
+                        source_chapter = c
+                        break
+
+                # Calculate scores (simple heuristics for now)
+                word_count = result.get("approx_word_count", 0)
+                # Engagement: prefer samples in the 500-800 word sweet spot
+                engagement = 1.0 - abs(word_count - 650) / 650
+                engagement = max(0.5, min(1.0, engagement))
+
+                # Create sample record
+                sample_data = {
+                    "job_id": job_id,
+                    "source_chapter_id": source_chapter["id"] if source_chapter else None,
+                    "sample_text": result.get("excerpt_text", ""),
+                    "word_count": word_count,
+                    "estimated_duration_seconds": result.get("approx_duration_seconds", 0),
+                    "engagement_score": round(engagement, 2),
+                    "emotional_intensity_score": round(0.7 + (i * 0.1), 2),  # Vary by style
+                    "spoiler_risk_score": round(0.2, 2),  # Early chapters = low spoiler
+                    "overall_score": round((engagement + 0.7 + (i * 0.1) + (1 - 0.2)) / 3, 2),
+                    "is_auto_suggested": True,
+                    "is_user_confirmed": False,
+                    "is_final": False,
+                    "candidate_rank": i + 1,
+                }
+
+                insert_result = db.client.table("retail_samples").insert(
+                    sample_data
+                ).execute()
+
+                if insert_result.data:
+                    new_samples.append(insert_result.data[0])
+
+            except Exception as e:
+                logger.warning(f"Failed to generate sample with style {style}: {e}")
+                continue
+
+        if not new_samples:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate any retail sample candidates"
+            )
+
+        # Sort by overall score
+        new_samples.sort(key=lambda x: x.get("overall_score", 0), reverse=True)
+
+        return [RetailSampleResponse(**s) for s in new_samples]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to regenerate retail samples: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to regenerate retail samples: {str(e)}"
         )
 
 
