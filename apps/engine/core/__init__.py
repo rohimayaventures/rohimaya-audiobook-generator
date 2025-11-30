@@ -11,6 +11,9 @@ from .chapter_parser import (
     detect_character_dialogue,
     reorder_chapters,
     get_segment_type_order,
+    calculate_segment_order,
+    assign_segment_orders,
+    generate_display_title,
     generate_findaway_filename,
     generate_track_list_from_chapters,
 )
@@ -35,6 +38,10 @@ __all__ = [
     "detect_character_dialogue",
     "reorder_chapters",
     "get_segment_type_order",
+    # Findaway segment ordering
+    "calculate_segment_order",
+    "assign_segment_orders",
+    "generate_display_title",
     # Findaway file naming
     "generate_findaway_filename",
     "generate_track_list_from_chapters",

@@ -424,6 +424,126 @@ def get_segment_type_order(segment_type: str) -> int:
     return order_map.get(segment_type, 2)
 
 
+def calculate_segment_order(segment_type: str, index_within_type: int) -> int:
+    """
+    Calculate the Findaway segment_order for a chapter.
+
+    Segment order ranges:
+    - 0: Opening credits
+    - 1-9: Front matter (up to 9 items)
+    - 10-79: Body chapters (up to 70 chapters)
+    - 80-89: Back matter (up to 10 items)
+    - 98: Closing credits
+    - 99: Retail sample
+
+    Args:
+        segment_type: One of the Findaway segment types
+        index_within_type: 0-based index within this segment type
+
+    Returns:
+        Integer segment_order for Findaway export ordering
+    """
+    if segment_type == "opening_credits":
+        return 0
+    elif segment_type == "front_matter":
+        return min(1 + index_within_type, 9)  # Cap at 9
+    elif segment_type == "body_chapter":
+        return min(10 + index_within_type, 79)  # Cap at 79
+    elif segment_type == "back_matter":
+        return min(80 + index_within_type, 89)  # Cap at 89
+    elif segment_type == "closing_credits":
+        return 98
+    elif segment_type == "retail_sample":
+        return 99
+    else:
+        # Default to body chapter range
+        return min(10 + index_within_type, 79)
+
+
+def assign_segment_orders(chapters: List[Dict]) -> List[Dict]:
+    """
+    Assign Findaway segment_order values to a list of chapters.
+
+    This function:
+    1. Groups chapters by segment_type
+    2. Assigns sequential segment_orders within each type
+    3. Returns chapters with segment_order set
+
+    The returned chapters are sorted by segment_order for correct
+    Findaway export ordering.
+
+    Args:
+        chapters: List of chapter dicts with segment_type set
+
+    Returns:
+        List of chapters with segment_order assigned, sorted by segment_order
+    """
+    # Group by segment type
+    by_type: Dict[str, List[Dict]] = {
+        "front_matter": [],
+        "body_chapter": [],
+        "back_matter": [],
+    }
+
+    for chapter in chapters:
+        seg_type = chapter.get("segment_type", "body_chapter")
+        if seg_type in by_type:
+            by_type[seg_type].append(chapter)
+        else:
+            # Unknown type goes to body_chapter
+            by_type["body_chapter"].append(chapter)
+
+    # Assign segment_order within each type
+    result = []
+
+    # Front matter (1-9)
+    for i, ch in enumerate(by_type["front_matter"]):
+        ch = ch.copy()
+        ch["segment_order"] = calculate_segment_order("front_matter", i)
+        result.append(ch)
+
+    # Body chapters (10-79)
+    for i, ch in enumerate(by_type["body_chapter"]):
+        ch = ch.copy()
+        ch["segment_order"] = calculate_segment_order("body_chapter", i)
+        result.append(ch)
+
+    # Back matter (80-89)
+    for i, ch in enumerate(by_type["back_matter"]):
+        ch = ch.copy()
+        ch["segment_order"] = calculate_segment_order("back_matter", i)
+        result.append(ch)
+
+    # Sort by segment_order
+    result.sort(key=lambda c: c.get("segment_order", 50))
+
+    logger.info(f"Assigned segment_order to {len(result)} chapters")
+    for ch in result:
+        logger.debug(f"  {ch['segment_order']:02d}: {ch['title']} [{ch['segment_type']}]")
+
+    return result
+
+
+def generate_display_title(chapter: Dict) -> str:
+    """
+    Generate a clean display title for a chapter.
+
+    Examples:
+    - "Chapter 1: The Beginning" -> "Chapter 1: The Beginning"
+    - "Prologue" -> "Prologue"
+    - "Chapter 10" -> "Chapter 10"
+    """
+    title = chapter.get("title", "Untitled")
+    seg_type = chapter.get("segment_type", "body_chapter")
+
+    # If it's a body chapter without a descriptive title, add chapter number
+    if seg_type == "body_chapter" and title.startswith("Chapter "):
+        return title
+
+    # For front/back matter, use the title as-is
+    return title
+
+
 # ============================================================================
 # FINDAWAY FILE NAMING
 # ============================================================================
