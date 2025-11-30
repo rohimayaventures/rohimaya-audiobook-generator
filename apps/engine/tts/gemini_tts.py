@@ -41,12 +41,12 @@ class VoicePreset:
 # Available voices: Aoede, Charon, Fenrir, Kore, Puck, Zephyr, etc.
 VOICE_PRESETS: Dict[str, VoicePreset] = {
     # =========================================================================
-    # ENGLISH - US (Main collection with variety)
+    # ENGLISH - US (Main collection with diverse, creative personas)
     # =========================================================================
     "narrator_female_warm": VoicePreset(
         id="narrator_female_warm",
-        label="Warm Female Narrator",
-        description="Warm, engaging female narrator - perfect for fiction and storytelling",
+        label="Celeste Monroe",
+        description="Warm, captivating voice that draws you into every story. Perfect for fiction and emotional narratives.",
         voice_name="Kore",
         default_language_code="en-US",
         gender="female",
@@ -54,8 +54,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_female_soft": VoicePreset(
         id="narrator_female_soft",
-        label="Soft Female Narrator",
-        description="Soft, gentle voice - ideal for romance and intimate stories",
+        label="Violet Sinclair",
+        description="Soft, intimate whispers for your heart. The perfect companion for romance and tender moments.",
         voice_name="Achernar",
         default_language_code="en-US",
         gender="female",
@@ -63,8 +63,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_female_smooth": VoicePreset(
         id="narrator_female_smooth",
-        label="Smooth Female Narrator",
-        description="Smooth, flowing voice - great for literary fiction",
+        label="Isabella Cruz",
+        description="Smooth as silk with timeless elegance. Made for literary fiction and classics.",
         voice_name="Despina",
         default_language_code="en-US",
         gender="female",
@@ -72,8 +72,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_female_youthful": VoicePreset(
         id="narrator_female_youthful",
-        label="Youthful Female Narrator",
-        description="Youthful, fresh voice - perfect for YA and coming-of-age stories",
+        label="Mia Brightwell",
+        description="Fresh, vibrant energy that captures youth and adventure. Ideal for YA and coming-of-age stories.",
         voice_name="Leda",
         default_language_code="en-US",
         gender="female",
@@ -81,8 +81,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_female_clear": VoicePreset(
         id="narrator_female_clear",
-        label="Clear Female Narrator",
-        description="Clear, articulate voice - ideal for non-fiction and educational content",
+        label="Dr. Evelyn Reed",
+        description="Crystal-clear articulation with intellectual warmth. Perfect for non-fiction and educational content.",
         voice_name="Erinome",
         default_language_code="en-US",
         gender="female",
@@ -90,8 +90,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_male_calm": VoicePreset(
         id="narrator_male_calm",
-        label="Calm Male Narrator",
-        description="Calm, professional male narrator - great for non-fiction and documentaries",
+        label="Marcus Blackwood",
+        description="Calm, authoritative presence that commands attention. Great for non-fiction and documentaries.",
         voice_name="Charon",
         default_language_code="en-US",
         gender="male",
@@ -99,8 +99,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_male_smooth": VoicePreset(
         id="narrator_male_smooth",
-        label="Smooth Male Narrator",
-        description="Smooth, rich voice - perfect for thrillers and mysteries",
+        label="James Hartley",
+        description="Smooth, magnetic voice that keeps you on edge. Perfect for thrillers and mysteries.",
         voice_name="Algieba",
         default_language_code="en-US",
         gender="male",
@@ -108,8 +108,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_male_warm": VoicePreset(
         id="narrator_male_warm",
-        label="Warm Male Narrator",
-        description="Warm, friendly voice - great for memoirs and personal stories",
+        label="Benjamin Stone",
+        description="Warm, inviting voice like a fireside chat. Great for memoirs and heartfelt stories.",
         voice_name="Sulafat",
         default_language_code="en-US",
         gender="male",
@@ -117,8 +117,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_male_gravelly": VoicePreset(
         id="narrator_male_gravelly",
-        label="Gravelly Male Narrator",
-        description="Deep, textured voice - ideal for noir and hard-boiled fiction",
+        label="Vincent Malone",
+        description="Deep, gravelly tones straight from a noir film. Ideal for crime fiction and gritty narratives.",
         voice_name="Algenib",
         default_language_code="en-US",
         gender="male",
@@ -126,8 +126,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_male_mature": VoicePreset(
         id="narrator_male_mature",
-        label="Mature Male Narrator",
-        description="Mature, seasoned voice - perfect for historical fiction and classics",
+        label="Theodore Wellington",
+        description="Distinguished and refined with decades of wisdom. Perfect for historical fiction and classics.",
         voice_name="Gacrux",
         default_language_code="en-US",
         gender="male",
@@ -135,8 +135,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_male_knowledgeable": VoicePreset(
         id="narrator_male_knowledgeable",
-        label="Knowledgeable Male Narrator",
-        description="Knowledgeable, authoritative voice - ideal for science and history",
+        label="Professor Arthur Hayes",
+        description="Authoritative expertise that makes complex topics accessible. Ideal for science and history.",
         voice_name="Sadaltager",
         default_language_code="en-US",
         gender="male",
@@ -144,8 +144,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "storyteller_expressive": VoicePreset(
         id="storyteller_expressive",
-        label="Expressive Storyteller",
-        description="Dynamic, expressive voice for fantasy and adventure stories",
+        label="Phoenix Starling",
+        description="Dynamic, theatrical flair that brings fantasy worlds to life. Perfect for epic adventures.",
         voice_name="Puck",
         default_language_code="en-US",
         gender="neutral",
@@ -153,8 +153,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "storyteller_lively": VoicePreset(
         id="storyteller_lively",
-        label="Lively Storyteller",
-        description="Lively, energetic voice for children's books and animated stories",
+        label="Jamie Whimsy",
+        description="Boundless energy and playful charm. Made for children's books and animated stories.",
         voice_name="Sadachbia",
         default_language_code="en-US",
         gender="neutral",
@@ -162,8 +162,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "storyteller_friendly": VoicePreset(
         id="storyteller_friendly",
-        label="Friendly Storyteller",
-        description="Friendly, approachable voice for casual and conversational content",
+        label="Sam Riverside",
+        description="Your best friend telling a story. Approachable and natural for casual content.",
         voice_name="Achird",
         default_language_code="en-US",
         gender="neutral",
@@ -171,8 +171,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "studio_neutral": VoicePreset(
         id="studio_neutral",
-        label="Studio Narrator",
-        description="Neutral, studio-quality voice for general audiobook narration",
+        label="Alex Sterling",
+        description="Studio-quality precision with versatile appeal. The reliable choice for any audiobook.",
         voice_name="Zephyr",
         default_language_code="en-US",
         gender="neutral",
@@ -180,8 +180,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "studio_bright": VoicePreset(
         id="studio_bright",
-        label="Bright Studio Narrator",
-        description="Bright, clear voice for business and self-help books",
+        label="Jordan Brooks",
+        description="Bright, motivational energy that inspires action. Perfect for business and self-help.",
         voice_name="Autonoe",
         default_language_code="en-US",
         gender="neutral",
@@ -189,8 +189,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "studio_even": VoicePreset(
         id="studio_even",
-        label="Even Studio Narrator",
-        description="Even, balanced voice for technical and instructional content",
+        label="Morgan Everett",
+        description="Perfectly balanced and precise. Ideal for technical guides and instructional content.",
         voice_name="Schedar",
         default_language_code="en-US",
         gender="neutral",
@@ -198,8 +198,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "casual_narrator": VoicePreset(
         id="casual_narrator",
-        label="Casual Narrator",
-        description="Relaxed, casual voice for informal and conversational audiobooks",
+        label="Riley Cooper",
+        description="Laid-back vibes like chatting over coffee. Great for casual and conversational audiobooks.",
         voice_name="Zubenelgenubi",
         default_language_code="en-US",
         gender="neutral",
@@ -207,8 +207,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "gentle_narrator": VoicePreset(
         id="gentle_narrator",
-        label="Gentle Narrator",
-        description="Gentle, soothing voice for meditation and wellness content",
+        label="Sage Meadows",
+        description="Tranquil and soothing like a gentle stream. Perfect for meditation and wellness content.",
         voice_name="Vindemiatrix",
         default_language_code="en-US",
         gender="neutral",
@@ -216,12 +216,12 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
 
     # =========================================================================
-    # ENGLISH - UK (British accents)
+    # ENGLISH - UK (British accents with unique personas)
     # =========================================================================
     "narrator_british_female": VoicePreset(
         id="narrator_british_female",
-        label="British Female Narrator",
-        description="Elegant British female voice for literary fiction",
+        label="Lady Victoria Ashworth",
+        description="Elegant British refinement with aristocratic charm. Perfect for literary fiction and period dramas.",
         voice_name="Aoede",
         default_language_code="en-GB",
         gender="female",
@@ -229,8 +229,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_british_male": VoicePreset(
         id="narrator_british_male",
-        label="British Male Narrator",
-        description="Distinguished British male voice for classics and period pieces",
+        label="Sir Edmund Fairfax",
+        description="Distinguished British gentleman's voice. Ideal for classics and period pieces.",
         voice_name="Fenrir",
         default_language_code="en-GB",
         gender="male",
@@ -238,19 +238,19 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_british_clear": VoicePreset(
         id="narrator_british_clear",
-        label="Clear British Narrator",
-        description="Clear, precise British voice for documentaries and non-fiction",
+        label="Elliot Clarke",
+        description="Clear, precise British articulation. Perfect for documentaries and non-fiction.",
         voice_name="Iapetus",
         default_language_code="en-GB",
         gender="neutral",
         style="clear, precise",
     ),
 
-    # Spanish
+    # Spanish (with culturally appropriate names)
     "narrator_spanish_female": VoicePreset(
         id="narrator_spanish_female",
-        label="Spanish Female Narrator",
-        description="Warm Spanish female voice for Latin American and Spanish content",
+        label="Lucia Fernandez",
+        description="Warm, passionate Spanish voice. Perfect for Latin American and Spanish content.",
         voice_name="Kore",
         default_language_code="es-ES",
         gender="female",
@@ -258,19 +258,19 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_spanish_male": VoicePreset(
         id="narrator_spanish_male",
-        label="Spanish Male Narrator",
-        description="Clear Spanish male voice for Spanish language audiobooks",
+        label="Alejandro Rivera",
+        description="Rich, engaging Spanish voice. Ideal for Spanish language audiobooks.",
         voice_name="Charon",
         default_language_code="es-ES",
         gender="male",
         style="clear, engaging",
     ),
 
-    # French
+    # French (with culturally appropriate names)
     "narrator_french_female": VoicePreset(
         id="narrator_french_female",
-        label="French Female Narrator",
-        description="Elegant French female voice for French content",
+        label="Camille Beaumont",
+        description="Elegant, melodic French voice. Made for French literary content.",
         voice_name="Aoede",
         default_language_code="fr-FR",
         gender="female",
@@ -278,19 +278,19 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_french_male": VoicePreset(
         id="narrator_french_male",
-        label="French Male Narrator",
-        description="Sophisticated French male voice",
+        label="Jean-Pierre Moreau",
+        description="Sophisticated French voice with cultured charm.",
         voice_name="Fenrir",
         default_language_code="fr-FR",
         gender="male",
         style="sophisticated, cultured",
     ),
 
-    # German
+    # German (with culturally appropriate names)
     "narrator_german_female": VoicePreset(
         id="narrator_german_female",
-        label="German Female Narrator",
-        description="Clear German female voice",
+        label="Anna Schmidt",
+        description="Clear, precise German voice. Perfect for German audiobooks.",
         voice_name="Kore",
         default_language_code="de-DE",
         gender="female",
@@ -298,19 +298,19 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_german_male": VoicePreset(
         id="narrator_german_male",
-        label="German Male Narrator",
-        description="Authoritative German male voice",
+        label="Klaus Weber",
+        description="Authoritative German voice with commanding presence.",
         voice_name="Charon",
         default_language_code="de-DE",
         gender="male",
         style="authoritative, clear",
     ),
 
-    # Hindi
+    # Hindi (with culturally appropriate names)
     "narrator_hindi_female": VoicePreset(
         id="narrator_hindi_female",
-        label="Hindi Female Narrator",
-        description="Warm Hindi female voice for Indian content",
+        label="Priya Sharma",
+        description="Warm, melodic Hindi voice. Perfect for Indian stories and content.",
         voice_name="Kore",
         default_language_code="hi-IN",
         gender="female",
@@ -318,19 +318,19 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_hindi_male": VoicePreset(
         id="narrator_hindi_male",
-        label="Hindi Male Narrator",
-        description="Clear Hindi male voice for Indian audiobooks",
+        label="Arjun Patel",
+        description="Clear, expressive Hindi voice. Ideal for Indian audiobooks.",
         voice_name="Charon",
         default_language_code="hi-IN",
         gender="male",
         style="clear, expressive",
     ),
 
-    # Marathi (using Hindi/Indian English voices as Gemini may not have dedicated Marathi)
+    # Marathi (with culturally appropriate names)
     "narrator_marathi_female": VoicePreset(
         id="narrator_marathi_female",
-        label="Marathi Female Narrator",
-        description="Female narrator for Marathi content (Indian multilingual voice)",
+        label="Meera Joshi",
+        description="Warm, traditional Marathi voice. Perfect for Marathi content.",
         voice_name="Kore",
         default_language_code="mr-IN",
         gender="female",
@@ -338,8 +338,8 @@ VOICE_PRESETS: Dict[str, VoicePreset] = {
     ),
     "narrator_marathi_male": VoicePreset(
         id="narrator_marathi_male",
-        label="Marathi Male Narrator",
-        description="Male narrator for Marathi content (Indian multilingual voice)",
+        label="Vikram Deshmukh",
+        description="Authentic Marathi voice for regional content.",
         voice_name="Charon",
         default_language_code="mr-IN",
         gender="male",

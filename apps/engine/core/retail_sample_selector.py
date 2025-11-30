@@ -15,20 +15,29 @@ import logging
 import json
 import re
 from typing import List, Dict, Optional, Tuple
-import google.generativeai as genai
 import os
 
 logger = logging.getLogger(__name__)
+
+# Try to import google.generativeai (optional dependency)
+try:
+    import google.generativeai as genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    genai = None
+    GENAI_AVAILABLE = False
+    logger.warning("google-generativeai not installed - AI retail sample selection disabled")
 
 # Target word count for retail sample (3-5 minutes at 150 wpm)
 MIN_SAMPLE_WORDS = 400
 MAX_SAMPLE_WORDS = 800
 TARGET_SAMPLE_WORDS = 600
 
-# Configure Gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
+# Configure Gemini (try multiple env var names for compatibility)
+GEMINI_API_KEY = os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY and GENAI_AVAILABLE:
     genai.configure(api_key=GEMINI_API_KEY)
+    logger.info("Gemini AI configured for retail sample selection")
 
 
 SAMPLE_ANALYSIS_PROMPT = """You are an expert audiobook producer selecting the perfect retail sample excerpt.
@@ -128,7 +137,7 @@ def select_retail_sample(
     # Limit to first N chapters
     chapters_to_analyze = body_chapters[:max_chapters_to_analyze]
 
-    if use_ai and GEMINI_API_KEY:
+    if use_ai and GEMINI_API_KEY and GENAI_AVAILABLE:
         try:
             return _select_with_gemini(chapters_to_analyze)
         except Exception as e:

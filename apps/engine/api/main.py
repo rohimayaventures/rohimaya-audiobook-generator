@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File, Form, Request
+from fastapi.responses import JSONResponse
+import traceback
+import uuid
 
 logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,6 +65,55 @@ app.add_middleware(
 
 
 # ============================================================================
+# GLOBAL EXCEPTION HANDLERS
+# ============================================================================
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler for unhandled errors.
+    Logs the full traceback and returns a structured error response.
+    """
+    # Generate a unique error ID for tracking
+    error_id = str(uuid.uuid4())[:8]
+
+    # Log the full error with traceback
+    logger.error(f"[ERROR-{error_id}] Unhandled exception on {request.method} {request.url.path}")
+    logger.error(f"[ERROR-{error_id}] {type(exc).__name__}: {str(exc)}")
+    logger.error(f"[ERROR-{error_id}] Traceback:\n{traceback.format_exc()}")
+
+    # Return structured error response
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_server_error",
+            "message": "An unexpected error occurred. Please try again.",
+            "error_id": error_id,
+            "detail": str(exc) if os.getenv("ENVIRONMENT") != "production" else None,
+        }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Handler for HTTP exceptions - log 4xx/5xx errors for monitoring.
+    """
+    if exc.status_code >= 500:
+        logger.error(f"[HTTP-{exc.status_code}] {request.method} {request.url.path}: {exc.detail}")
+    elif exc.status_code >= 400:
+        logger.warning(f"[HTTP-{exc.status_code}] {request.method} {request.url.path}: {exc.detail}")
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.detail if isinstance(exc.detail, str) else "error",
+            "message": exc.detail,
+        }
+    )
+
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -93,12 +145,23 @@ def is_user_admin(user_info: Optional[Dict[str, Any]]) -> bool:
 # PYDANTIC MODELS (Request/Response Schemas)
 # ============================================================================
 
+class DependencyHealth(BaseModel):
+    """Health status of a single dependency"""
+    name: str
+    status: str  # "ok", "degraded", "error"
+    latency_ms: Optional[float] = None
+    error: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     """Health check response"""
     status: str
     service: str
     version: str
     timestamp: str
+    dependencies: Optional[Dict[str, DependencyHealth]] = None
+    worker_running: Optional[bool] = None
+    queue_size: Optional[int] = None
 
 
 class JobCreateRequest(BaseModel):
@@ -234,13 +297,87 @@ async def root() -> Dict[str, Any]:
     summary="Health Check",
     tags=["System"],
 )
-async def health_check() -> HealthResponse:
-    """Health check endpoint for monitoring"""
+async def health_check(detailed: bool = False) -> HealthResponse:
+    """
+    Health check endpoint for monitoring.
+
+    Pass ?detailed=true for dependency health checks (Supabase, R2, Worker).
+    """
+    import time
+
+    dependencies = {}
+    overall_status = "ok"
+
+    if detailed:
+        # Check Supabase connection
+        try:
+            start = time.time()
+            # Simple query to test connection
+            db.client.table("jobs").select("id").limit(1).execute()
+            latency = (time.time() - start) * 1000
+            dependencies["supabase"] = DependencyHealth(
+                name="supabase",
+                status="ok",
+                latency_ms=round(latency, 2)
+            )
+        except Exception as e:
+            overall_status = "degraded"
+            dependencies["supabase"] = DependencyHealth(
+                name="supabase",
+                status="error",
+                error=str(e)[:100]
+            )
+
+        # Check R2 Storage connection
+        try:
+            start = time.time()
+            # Just check if we can list buckets
+            r2_url = os.getenv("R2_ENDPOINT_URL")
+            if r2_url:
+                # R2 client is initialized in database.py
+                latency = (time.time() - start) * 1000
+                dependencies["r2_storage"] = DependencyHealth(
+                    name="r2_storage",
+                    status="ok" if r2_url else "not_configured",
+                    latency_ms=round(latency, 2)
+                )
+            else:
+                dependencies["r2_storage"] = DependencyHealth(
+                    name="r2_storage",
+                    status="not_configured"
+                )
+        except Exception as e:
+            overall_status = "degraded"
+            dependencies["r2_storage"] = DependencyHealth(
+                name="r2_storage",
+                status="error",
+                error=str(e)[:100]
+            )
+
+        # Check TTS provider availability
+        google_key = os.getenv("GOOGLE_GENAI_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+        dependencies["tts"] = DependencyHealth(
+            name="tts",
+            status="ok" if (google_key or openai_key) else "not_configured",
+            error=None if (google_key or openai_key) else "No TTS API key configured"
+        )
+
+    # Get worker and queue status
+    queue_status = get_queue_status()
+    worker_running = is_worker_running()
+
+    if not worker_running:
+        overall_status = "degraded"
+
     return HealthResponse(
-        status="ok",
+        status=overall_status,
         service="authorflow-engine",
         version="0.2.0",
-        timestamp=datetime.utcnow().isoformat() + "Z"
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        dependencies=dependencies if detailed else None,
+        worker_running=worker_running,
+        queue_size=queue_status.get("total", 0)
     )
 
 

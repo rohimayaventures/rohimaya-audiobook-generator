@@ -10,6 +10,8 @@ streamlit==1.29.0
 openai==1.6.1
 # Gemini TTS (replaces google-cloud-texttospeech)
 google-genai>=1.0.0
+# Gemini AI for retail sample selection
+google-generativeai>=0.8.0
 
 # Document processing
 python-docx==1.1.0
