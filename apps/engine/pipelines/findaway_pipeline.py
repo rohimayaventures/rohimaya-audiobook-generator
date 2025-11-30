@@ -6,14 +6,15 @@ Complete pipeline for generating Findaway-compliant audiobook packages:
 - Opening/ending credits generation
 - Retail sample selection
 - Chapter-by-chapter audio generation
-- Cover image generation
 - Manifest JSON creation
 - ZIP packaging
+
+Note: Cover art generation has been removed from this pipeline.
+Users should generate cover art separately using a dedicated service.
 
 Output structure:
 job_id/
   manifest.json
-  cover_2400x2400.png
   audio/
     01_opening_credits.mp3
     02_front_matter.mp3 (optional)
@@ -39,7 +40,6 @@ logger = logging.getLogger(__name__)
 from agents.manuscript_parser_agent import parse_manuscript_structure
 from agents.retail_sample_agent import select_retail_sample_excerpt
 from core.findaway_planner import build_findaway_section_plan, get_sections_for_tts
-from core.cover_generator import generate_cover_image, save_cover_to_file, get_cover_filename
 
 
 def generate_findaway_audiobook(
@@ -67,7 +67,6 @@ def generate_findaway_audiobook(
             "manifest_path": Path,
             "zip_path": Path,
             "audio_files": List[Path],
-            "cover_path": Path,
             "total_duration_seconds": int,
             "section_count": int,
         }
@@ -150,36 +149,13 @@ def generate_findaway_audiobook(
     update_progress(30, f"Section plan ready: {len(sections)} sections")
 
     # ==========================================================================
-    # STEP 4: Generate cover image
-    # ==========================================================================
-    update_progress(32, "Generating cover image")
-
-    cover_path = None
-    try:
-        cover_result = generate_cover_image(
-            title=book_metadata.get("title", "Untitled"),
-            author=book_metadata.get("author"),
-            genre=book_metadata.get("genre"),
-            vibe=book_metadata.get("cover_vibe"),
-            custom_description=book_metadata.get("cover_description"),
-        )
-
-        cover_filename = get_cover_filename(book_metadata.get("title", "cover"))
-        cover_path = save_cover_to_file(cover_result, output_dir / cover_filename)
-        logger.info(f"Cover generated: {cover_path}")
-    except Exception as e:
-        logger.warning(f"Cover generation failed (continuing without cover): {e}")
-
-    update_progress(35, "Cover image ready" if cover_path else "Skipping cover (generation failed)")
-
-    # ==========================================================================
-    # STEP 5: Generate audio for each section
+    # STEP 4: Generate audio for each section
     # ==========================================================================
     audio_files = []
     total_duration_seconds = 0
 
-    # Calculate progress distribution for audio generation (35% to 90%)
-    audio_progress_start = 35
+    # Calculate progress distribution for audio generation (30% to 90%)
+    audio_progress_start = 30
     audio_progress_end = 90
     audio_progress_range = audio_progress_end - audio_progress_start
 
@@ -209,14 +185,13 @@ def generate_findaway_audiobook(
     update_progress(90, f"Audio generation complete: {len(audio_files)} files")
 
     # ==========================================================================
-    # STEP 6: Create manifest JSON
+    # STEP 5: Create manifest JSON
     # ==========================================================================
     update_progress(92, "Creating manifest")
 
     manifest = _create_manifest(
         book_metadata=book_metadata,
         section_plan=section_plan,
-        cover_path=cover_path,
         total_duration_seconds=total_duration_seconds,
         generated_sections=sections,
     )
@@ -228,7 +203,7 @@ def generate_findaway_audiobook(
     logger.info(f"Manifest created: {manifest_path}")
 
     # ==========================================================================
-    # STEP 7: Create ZIP package
+    # STEP 6: Create ZIP package
     # ==========================================================================
     update_progress(95, "Creating ZIP package")
 
@@ -236,7 +211,6 @@ def generate_findaway_audiobook(
         output_dir=output_dir,
         manifest_path=manifest_path,
         audio_dir=audio_dir,
-        cover_path=cover_path,
         book_title=book_metadata.get("title", "audiobook")
     )
 
@@ -248,7 +222,6 @@ def generate_findaway_audiobook(
         "manifest_path": manifest_path,
         "zip_path": zip_path,
         "audio_files": audio_files,
-        "cover_path": cover_path,
         "total_duration_seconds": total_duration_seconds,
         "section_count": len(sections),
         "manifest": manifest,
@@ -508,11 +481,10 @@ def _create_fallback_sample(manuscript_structure: Dict[str, Any]) -> Dict[str, A
 def _create_manifest(
     book_metadata: Dict[str, Any],
     section_plan: Dict[str, Any],
-    cover_path: Optional[Path],
     total_duration_seconds: int,
     generated_sections: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Create Findaway-compatible manifest JSON."""
+    """Create Findaway-compatible manifest JSON (cover art should be added separately)."""
     # Use the generated sections list if provided, otherwise get from plan
     sections = generated_sections if generated_sections else get_sections_for_tts(section_plan)
 
@@ -553,11 +525,7 @@ def _create_manifest(
             "files": audio_files,
         },
 
-        "cover": {
-            "filename": cover_path.name if cover_path else None,
-            "dimensions": "2400x2400",
-            "format": "png",
-        } if cover_path else None,
+        "cover": None,  # Cover art should be generated separately
 
         "credits": {
             "opening": section_plan.get("opening_credits", {}).get("script"),
@@ -576,7 +544,7 @@ def _create_manifest(
             "has_opening_credits": any(s.get("section_id") == "opening_credits" for s in sections),
             "has_ending_credits": any(s.get("section_id") == "ending_credits" for s in sections),
             "has_retail_sample": any(s.get("section_id") == "retail_sample" for s in sections),
-            "cover_dimensions_valid": cover_path is not None,
+            "cover_dimensions_valid": False,  # Cover art should be added separately
         }
     }
 
@@ -593,10 +561,9 @@ def _create_zip_package(
     output_dir: Path,
     manifest_path: Path,
     audio_dir: Path,
-    cover_path: Optional[Path],
     book_title: str
 ) -> Path:
-    """Create ZIP package with all audiobook files."""
+    """Create ZIP package with all audiobook files (cover art should be added separately)."""
     # Sanitize title for filename
     safe_title = "".join(c for c in book_title if c.isalnum() or c in (' ', '-', '_')).strip()
     safe_title = safe_title.replace(' ', '_')[:50]
@@ -609,10 +576,6 @@ def _create_zip_package(
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         # Add manifest
         zf.write(manifest_path, "manifest.json")
-
-        # Add cover if exists
-        if cover_path and cover_path.exists():
-            zf.write(cover_path, cover_path.name)
 
         # Add all audio files
         if audio_dir.exists():

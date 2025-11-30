@@ -4,7 +4,6 @@ AuthorFlow Studios - AI Agents
 This module contains AI-powered agents for:
 - Manuscript parsing and structure analysis
 - Retail sample selection
-- Cover image generation assistance
 """
 
 from .manuscript_parser_agent import parse_manuscript_structure

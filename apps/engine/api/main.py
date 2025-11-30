@@ -130,12 +130,6 @@ class JobCreateRequest(BaseModel):
     publisher: Optional[str] = Field(None, description="Publisher name (findaway)")
     sample_style: Optional[str] = Field(default="default", description="'default' or 'spicy' for romance (findaway)")
 
-    # Cover art generation options
-    generate_cover: bool = Field(default=False, description="Generate AI cover art for this audiobook")
-    cover_vibe: Optional[str] = Field(None, description="Visual vibe for AI cover generation")
-    cover_description: Optional[str] = Field(None, description="Custom description for cover art (user's vision)")
-    cover_image_provider: Optional[str] = Field(None, description="openai or banana (uses env default if not set)")
-
     class Config:
         json_schema_extra = {
             "example": {
@@ -195,12 +189,6 @@ class JobResponse(BaseModel):
     package_type: Optional[str] = None
     section_count: Optional[int] = None
 
-    # Cover art fields
-    generate_cover: Optional[bool] = None
-    cover_vibe: Optional[str] = None
-    cover_image_provider: Optional[str] = None
-    has_cover: Optional[bool] = None
-    cover_image_path: Optional[str] = None
 
 
 class VoiceInfo(BaseModel):
@@ -399,11 +387,6 @@ async def create_job(
         "isbn": request.isbn,
         "publisher": request.publisher,
         "sample_style": request.sample_style,
-        # Cover art generation
-        "generate_cover": request.generate_cover,
-        "cover_vibe": request.cover_vibe,
-        "cover_description": request.cover_description,
-        "cover_image_provider": request.cover_image_provider,
     }
 
     job = db.create_job(job_data)
@@ -879,7 +862,6 @@ async def clone_job(
         "isbn": original_job.get("isbn"),
         "publisher": original_job.get("publisher"),
         "sample_style": original_job.get("sample_style", "default"),
-        "cover_vibe": original_job.get("cover_vibe"),
         # Reset progress fields
         "progress_percent": 0.0,
         "retry_count": 0,
@@ -2257,65 +2239,6 @@ async def disconnect_google_drive(
 
 
 # ============================================================================
-# COVER ART ENDPOINTS
-# ============================================================================
-
-class CoverArtResponse(BaseModel):
-    """Cover art response"""
-    has_cover: bool
-    cover_url: Optional[str] = None
-    cover_path: Optional[str] = None
-
-
-@app.get(
-    "/jobs/{job_id}/cover",
-    response_model=CoverArtResponse,
-    summary="Get Cover Image URL",
-    tags=["Jobs"],
-)
-async def get_job_cover_url(
-    job_id: str,
-    user_id: str = Depends(get_current_user)
-) -> CoverArtResponse:
-    """
-    Get cover art information for a job.
-
-    Returns has_cover=false if no cover is available.
-    If has_cover=true, cover_url contains a presigned URL (expires in 1 hour).
-    """
-    job = db.get_job(job_id)
-
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job {job_id} not found"
-        )
-
-    # Verify ownership
-    if job["user_id"] != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to access this job"
-        )
-
-    # Check if job has a cover
-    if not job.get("has_cover") or not job.get("cover_image_path"):
-        return CoverArtResponse(has_cover=False)
-
-    # Get presigned URL
-    try:
-        cover_url = db.get_download_url(job["cover_image_path"], expires_in=3600)
-        return CoverArtResponse(
-            has_cover=True,
-            cover_url=cover_url,
-            cover_path=job.get("cover_image_path")
-        )
-    except Exception as e:
-        print(f"Failed to generate cover URL for job {job_id}: {e}")
-        return CoverArtResponse(has_cover=False)
-
-
-# ============================================================================
 # WORKER HEALTH ENDPOINT
 # ============================================================================
 
@@ -2384,8 +2307,6 @@ class SystemStatusResponse(BaseModel):
     # Feature Flags
     google_drive_enabled: bool
     emotional_tts_enabled: bool
-    banana_cover_enabled: bool
-
     # Recent Errors
     recent_errors: List[Dict[str, Any]]
 
@@ -2505,7 +2426,6 @@ async def get_system_status(
         # Feature Flags
         google_drive_enabled=is_google_drive_configured(),
         emotional_tts_enabled=os.getenv("EMOTIONAL_TTS_ENABLED", "true").lower() == "true",
-        banana_cover_enabled=bool(os.getenv("BANANA_API_KEY")),
 
         # Recent Errors
         recent_errors=recent_errors,

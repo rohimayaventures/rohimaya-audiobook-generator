@@ -113,12 +113,6 @@ export interface Job {
   output_language_code?: string
   voice_preset_id?: string
   emotion_style_prompt?: string
-  // Cover art fields
-  generate_cover?: boolean
-  cover_vibe?: string
-  cover_image_provider?: string
-  has_cover?: boolean
-  cover_image_path?: string
 }
 
 export interface CreateJobPayload {
@@ -150,10 +144,6 @@ export interface CreateJobPayload {
   isbn?: string
   publisher?: string
   sample_style?: 'default' | 'spicy' | 'ultra_spicy'
-  // Cover art generation
-  generate_cover?: boolean
-  cover_vibe?: string
-  cover_image_provider?: 'openai' | 'banana'
 }
 
 export interface CloneJobPayload {
@@ -179,7 +169,6 @@ export interface SystemStatus {
   active_subscriptions: number
   google_drive_enabled: boolean
   emotional_tts_enabled: boolean
-  banana_cover_enabled: boolean
   recent_errors: Array<{
     job_id: string
     title: string
@@ -433,23 +422,6 @@ export async function disconnectGoogleDrive(): Promise<{ success: boolean; messa
   return fetchApi<{ success: boolean; message: string }>('/google-drive/disconnect', {
     method: 'DELETE',
   })
-}
-
-// ============================================
-// Cover Art
-// ============================================
-
-export interface CoverArtResponse {
-  has_cover: boolean
-  cover_url?: string
-  cover_path?: string
-}
-
-/**
- * Get cover art URL for a job
- */
-export async function getJobCoverUrl(jobId: string): Promise<CoverArtResponse> {
-  return fetchApi<CoverArtResponse>(`/jobs/${jobId}/cover`)
 }
 
 // ============================================

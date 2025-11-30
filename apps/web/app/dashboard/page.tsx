@@ -57,16 +57,6 @@ const OUTPUT_FORMATS = [
   { id: 'm4b', name: 'M4B', description: 'Audiobook format' },
 ]
 
-// Cover art vibe options - DISABLED (Cover art moved to separate service)
-// const COVER_VIBES = [
-//   { id: 'dramatic', name: 'Dramatic', description: 'Bold, cinematic style' },
-//   { id: 'minimalist', name: 'Minimalist', description: 'Clean, simple design' },
-//   { id: 'vintage', name: 'Vintage', description: 'Classic, retro feel' },
-//   { id: 'fantasy', name: 'Fantasy', description: 'Magical, ethereal style' },
-//   { id: 'modern', name: 'Modern', description: 'Contemporary, sleek design' },
-//   { id: 'literary', name: 'Literary', description: 'Elegant, bookish aesthetic' },
-// ]
-
 interface UserWithMetadata {
   email?: string
   user_metadata?: {
@@ -104,11 +94,6 @@ function DashboardContent() {
   const [emotionStyle, setEmotionStyle] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewAudio, setPreviewAudio] = useState<string | null>(null)
-
-  // Cover art options - DISABLED (Cover art moved to separate service)
-  // const [generateCover, setGenerateCover] = useState(false)
-  // const [coverVibe, setCoverVibe] = useState('dramatic')
-  // const [coverDescription, setCoverDescription] = useState('')
 
   // Google Drive state
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatus | null>(null)
@@ -332,12 +317,6 @@ function DashboardContent() {
         // Text or Google Drive source path
         ...(inputMode === 'text' ? { manuscript_text: text } : {}),
         ...(inputMode === 'google_drive' && importedManuscriptPath ? { source_path: importedManuscriptPath } : {}),
-        // Cover art options - DISABLED (Cover art moved to separate service)
-        // ...(generateCover ? {
-        //   generate_cover: true,
-        //   cover_vibe: coverVibe,
-        //   ...(coverDescription.trim() ? { cover_description: coverDescription.trim() } : {}),
-        // } : {}),
       }
 
       await createJob(payload, inputMode === 'file' ? file! : undefined)
@@ -352,9 +331,6 @@ function DashboardContent() {
       setTitle('')
       setSelectedDriveFile(null)
       setImportedManuscriptPath(null)
-      // Cover art reset - DISABLED
-      // setGenerateCover(false)
-      // setCoverDescription('')
       setEmotionStyle('')
       setPreviewAudio(null)
     } catch (err) {
@@ -783,9 +759,6 @@ function DashboardContent() {
                 ))}
               </select>
             </div>
-
-            {/* Cover Art Generation - DISABLED (Moved to separate service) */}
-            {/* TODO: Re-enable when cover art service is ready */}
 
             {/* Error message */}
             {createError && (
