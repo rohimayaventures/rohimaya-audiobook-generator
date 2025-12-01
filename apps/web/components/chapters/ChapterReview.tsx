@@ -18,6 +18,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import { GlassCard, PrimaryButton, SecondaryButton } from '@/components/ui'
 import {
   getJobChapters,
@@ -126,8 +127,11 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
     try {
       const updated = await updateChapter(job.id, chapter.id, { status: newStatus })
       setChapters(chapters.map(c => c.id === chapter.id ? updated : c))
+      toast.success(newStatus === 'excluded' ? 'Chapter excluded' : 'Chapter included')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update chapter')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update chapter'
+      setError(errorMsg)
+      toast.error(errorMsg)
     } finally {
       setSaving(false)
     }
@@ -139,8 +143,11 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
     try {
       const updated = await updateChapter(job.id, chapter.id, { segment_type: segmentType })
       setChapters(chapters.map(c => c.id === chapter.id ? updated : c))
+      toast.success(`Changed to ${getSegmentLabel(segmentType)}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update chapter')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update chapter'
+      setError(errorMsg)
+      toast.error(errorMsg)
     } finally {
       setSaving(false)
     }
@@ -173,8 +180,11 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
     try {
       const reordered = await reorderChapters(job.id, newOrder)
       setChapters(reordered)
+      toast.success('Chapter order saved')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reorder chapters')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to reorder chapters'
+      setError(errorMsg)
+      toast.error(errorMsg)
       // Refresh to get correct order
       fetchChapters()
     } finally {
@@ -202,7 +212,9 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
       const reordered = await reorderChapters(job.id, newOrder)
       setChapters(reordered)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reorder chapters')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to reorder chapters'
+      setError(errorMsg)
+      toast.error(errorMsg)
       fetchChapters()
     } finally {
       setSaving(false)
@@ -215,9 +227,12 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
     setError('')
     try {
       const updatedJob = await approveChapters(job.id)
+      toast.success('Chapters approved! Starting audio generation...')
       onApproved(updatedJob)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve chapters')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to approve chapters'
+      setError(errorMsg)
+      toast.error(errorMsg)
     } finally {
       setApproving(false)
     }
@@ -336,12 +351,13 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
                     disabled={index === 0}
                     className="p-1 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="Move up"
+                    aria-label={`Move ${chapter.display_title || chapter.title} up`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                     </svg>
                   </button>
-                  <div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center">
+                  <div className="w-6 h-6 rounded bg-white/5 flex items-center justify-center" aria-label={`Position ${index + 1}`}>
                     <span className="text-xs font-mono text-white/60">{index + 1}</span>
                   </div>
                   <button
@@ -349,8 +365,9 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
                     disabled={index === chapters.length - 1}
                     className="p-1 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="Move down"
+                    aria-label={`Move ${chapter.display_title || chapter.title} down`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
@@ -398,11 +415,19 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
                   <select
                     value={chapter.segment_type}
                     onChange={(e) => handleSegmentTypeChange(chapter, e.target.value as 'front_matter' | 'body_chapter' | 'back_matter')}
-                    className="bg-af-dark border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/80 cursor-pointer hover:border-white/20 transition-colors"
+                    className="bg-af-dark border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white cursor-pointer hover:border-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-af-purple/50 appearance-none"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 8px center',
+                      backgroundSize: '16px',
+                      paddingRight: '32px'
+                    }}
+                    aria-label={`Segment type for ${chapter.display_title || chapter.title}`}
                   >
-                    <option value="front_matter">Front Matter</option>
-                    <option value="body_chapter">Chapter</option>
-                    <option value="back_matter">Back Matter</option>
+                    <option value="front_matter" className="bg-af-dark text-white">Front Matter</option>
+                    <option value="body_chapter" className="bg-af-dark text-white">Chapter</option>
+                    <option value="back_matter" className="bg-af-dark text-white">Back Matter</option>
                   </select>
 
                   {/* Preview toggle */}
@@ -416,8 +441,10 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
                       }
                     `}
                     title={expandedChapter === chapter.id ? 'Hide preview' : 'Show preview'}
+                    aria-label={expandedChapter === chapter.id ? `Hide preview of ${chapter.display_title || chapter.title}` : `Show preview of ${chapter.display_title || chapter.title}`}
+                    aria-expanded={expandedChapter === chapter.id}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
@@ -434,13 +461,15 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
                       }
                     `}
                     title={chapter.status === 'excluded' ? 'Include in audiobook' : 'Exclude from audiobook'}
+                    aria-label={chapter.status === 'excluded' ? `Include ${chapter.display_title || chapter.title} in audiobook` : `Exclude ${chapter.display_title || chapter.title} from audiobook`}
+                    aria-pressed={chapter.status !== 'excluded'}
                   >
                     {chapter.status === 'excluded' ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                     ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     )}

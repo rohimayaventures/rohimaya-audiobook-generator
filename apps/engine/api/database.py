@@ -5,6 +5,7 @@ Storage is handled by Cloudflare R2 (see storage_r2.py)
 """
 
 import os
+import logging
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -13,6 +14,8 @@ from supabase import create_client, Client
 
 # Import R2 storage client
 from .storage_r2 import r2
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables (only for local development)
 # In production (Railway), env vars are set directly
@@ -51,9 +54,19 @@ class SupabaseDB:
 
         Returns:
             Created job record with ID
+
+        Raises:
+            Exception: If database operation fails
         """
-        result = self.client.table("jobs").insert(job_data).execute()
-        return result.data[0] if result.data else None
+        try:
+            result = self.client.table("jobs").insert(job_data).execute()
+            if not result.data:
+                logger.error(f"create_job: No data returned from insert")
+                raise Exception("Failed to create job: no data returned")
+            return result.data[0]
+        except Exception as e:
+            logger.error(f"create_job failed: {e}")
+            raise
 
     def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -65,8 +78,12 @@ class SupabaseDB:
         Returns:
             Job record or None if not found
         """
-        result = self.client.table("jobs").select("*").eq("id", job_id).execute()
-        return result.data[0] if result.data else None
+        try:
+            result = self.client.table("jobs").select("*").eq("id", job_id).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"get_job({job_id}) failed: {e}")
+            raise
 
     def get_user_jobs(
         self,
@@ -87,15 +104,19 @@ class SupabaseDB:
         Returns:
             List of job records
         """
-        query = self.client.table("jobs").select("*").eq("user_id", user_id)
+        try:
+            query = self.client.table("jobs").select("*").eq("user_id", user_id)
 
-        if status:
-            query = query.eq("status", status)
+            if status:
+                query = query.eq("status", status)
 
-        query = query.order("created_at", desc=True).limit(limit).offset(offset)
+            query = query.order("created_at", desc=True).limit(limit).offset(offset)
 
-        result = query.execute()
-        return result.data if result.data else []
+            result = query.execute()
+            return result.data if result.data else []
+        except Exception as e:
+            logger.error(f"get_user_jobs({user_id}) failed: {e}")
+            raise
 
     def update_job(self, job_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -107,9 +128,19 @@ class SupabaseDB:
 
         Returns:
             Updated job record
+
+        Raises:
+            Exception: If database operation fails
         """
-        result = self.client.table("jobs").update(updates).eq("id", job_id).execute()
-        return result.data[0] if result.data else None
+        try:
+            result = self.client.table("jobs").update(updates).eq("id", job_id).execute()
+            if not result.data:
+                logger.warning(f"update_job({job_id}): No data returned from update")
+                return None
+            return result.data[0]
+        except Exception as e:
+            logger.error(f"update_job({job_id}) failed: {e}")
+            raise
 
     def delete_job(self, job_id: str) -> bool:
         """
@@ -241,7 +272,7 @@ class SupabaseDB:
         elif bucket_type == "audiobooks":
             return self.storage.delete_audiobook(object_key)
         else:
-            print(f"❌ Unknown bucket type: {bucket_type}")
+            logger.error(f"delete_storage_file: Unknown bucket type: {bucket_type}")
             return False
 
     # ========================================================================
@@ -271,7 +302,7 @@ class SupabaseDB:
                 }
             return None
         except Exception as e:
-            print(f"Error getting user {user_id}: {e}")
+            logger.error(f"get_user({user_id}) failed: {e}")
             return None
 
     # ========================================================================
@@ -437,7 +468,7 @@ class SupabaseDB:
             result = self.client.table("google_drive_tokens").select("*").eq("user_id", user_id).execute()
             return result.data[0] if result.data else None
         except Exception as e:
-            print(f"Error getting Google Drive tokens for user {user_id}: {e}")
+            logger.error(f"get_google_drive_tokens({user_id}) failed: {e}")
             return None
 
     def store_google_drive_tokens(self, user_id: str, tokens: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -477,7 +508,7 @@ class SupabaseDB:
 
             return result.data[0] if result.data else None
         except Exception as e:
-            print(f"Error storing Google Drive tokens for user {user_id}: {e}")
+            logger.error(f"store_google_drive_tokens({user_id}) failed: {e}")
             return None
 
     def clear_google_drive_tokens(self, user_id: str) -> bool:
@@ -494,7 +525,7 @@ class SupabaseDB:
             self.client.table("google_drive_tokens").delete().eq("user_id", user_id).execute()
             return True
         except Exception as e:
-            print(f"Error clearing Google Drive tokens for user {user_id}: {e}")
+            logger.error(f"clear_google_drive_tokens({user_id}) failed: {e}")
             return False
 
 

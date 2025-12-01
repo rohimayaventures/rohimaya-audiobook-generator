@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import type { Step, CallBackProps } from 'react-joyride'
 import { STATUS } from 'react-joyride'
@@ -25,6 +25,7 @@ const DASHBOARD_TOUR_STEPS: Step[] = [
     ),
     placement: 'center',
     disableBeacon: true,
+    disableScrolling: true,
   },
   {
     target: '[data-tour="upload-section"]',
@@ -37,7 +38,9 @@ const DASHBOARD_TOUR_STEPS: Step[] = [
         </p>
       </div>
     ),
-    placement: 'bottom',
+    placement: 'right',
+    disableBeacon: true,
+    spotlightPadding: 10,
   },
   {
     target: '[data-tour="voice-selection"]',
@@ -51,6 +54,8 @@ const DASHBOARD_TOUR_STEPS: Step[] = [
       </div>
     ),
     placement: 'left',
+    disableBeacon: true,
+    spotlightPadding: 10,
   },
   {
     target: '[data-tour="language-options"]',
@@ -63,7 +68,9 @@ const DASHBOARD_TOUR_STEPS: Step[] = [
         </p>
       </div>
     ),
-    placement: 'left',
+    placement: 'top',
+    disableBeacon: true,
+    spotlightPadding: 10,
   },
   {
     target: '[data-tour="create-button"]',
@@ -77,6 +84,8 @@ const DASHBOARD_TOUR_STEPS: Step[] = [
       </div>
     ),
     placement: 'top',
+    disableBeacon: true,
+    spotlightPadding: 10,
   },
   {
     target: '[data-tour="recent-jobs"]',
@@ -90,6 +99,8 @@ const DASHBOARD_TOUR_STEPS: Step[] = [
       </div>
     ),
     placement: 'top',
+    disableBeacon: true,
+    spotlightPadding: 10,
   },
   {
     target: 'body',
@@ -105,6 +116,8 @@ const DASHBOARD_TOUR_STEPS: Step[] = [
       </div>
     ),
     placement: 'center',
+    disableBeacon: true,
+    disableScrolling: true,
   },
 ]
 
@@ -212,6 +225,8 @@ interface OnboardingTourProps {
   forceShow?: boolean
   onComplete?: () => void
   onSkip?: () => void
+  /** Pass true if user is new (has no jobs). Tour only shows for new users. */
+  isNewUser?: boolean
 }
 
 export function OnboardingTour({
@@ -219,17 +234,29 @@ export function OnboardingTour({
   forceShow = false,
   onComplete,
   onSkip,
+  isNewUser = false,
 }: OnboardingTourProps) {
   const [run, setRun] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const [mounted, setMounted] = useState(false)
+  const [ready, setReady] = useState(false)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Get the appropriate steps based on tour type
   const steps = tourType === 'dashboard' ? DASHBOARD_TOUR_STEPS : JOB_DETAIL_TOUR_STEPS
 
-  // Check if tour should run on mount
+  // Wait for DOM elements to be ready before starting tour
   useEffect(() => {
     setMounted(true)
+
+    // Give the page time to render all elements
+    const readyTimer = setTimeout(() => setReady(true), 500)
+    return () => clearTimeout(readyTimer)
+  }, [])
+
+  // Check if tour should run
+  useEffect(() => {
+    if (!mounted || !ready) return
 
     // Check if user has already completed or skipped the tour
     if (typeof window !== 'undefined') {
@@ -237,14 +264,21 @@ export function OnboardingTour({
       const skipped = localStorage.getItem(TOUR_SKIPPED_KEY)
 
       if (forceShow) {
-        setRun(true)
-      } else if (!completed && !skipped) {
-        // Auto-start tour for new users after a short delay
-        const timer = setTimeout(() => setRun(true), 1500)
-        return () => clearTimeout(timer)
+        // Force show immediately (for testing or manual trigger)
+        timerRef.current = setTimeout(() => setRun(true), 300)
+      } else if (!completed && !skipped && isNewUser) {
+        // Only auto-start tour for NEW users who haven't seen it
+        // Wait a bit longer to ensure all elements are rendered
+        timerRef.current = setTimeout(() => setRun(true), 1000)
       }
     }
-  }, [forceShow])
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+      }
+    }
+  }, [forceShow, isNewUser, mounted, ready])
 
   // Handle tour callbacks
   const handleJoyrideCallback = useCallback((data: CallBackProps) => {

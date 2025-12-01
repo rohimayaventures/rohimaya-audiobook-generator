@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useDropzone } from 'react-dropzone'
@@ -98,6 +98,9 @@ function DashboardContent() {
   const [previewAudio, setPreviewAudio] = useState<string | null>(null)
   const [previewText, setPreviewText] = useState('My heart found its home in your hands. Every whisper between us tells a story of forever.')
 
+  // Audio ref for memory leak prevention
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
   // Google Drive state
   const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatus | null>(null)
   const [googleDriveFiles, setGoogleDriveFiles] = useState<GoogleDriveFile[]>([])
@@ -117,6 +120,9 @@ function DashboardContent() {
         setJobs(jobsList)
       } catch (err) {
         console.error('Failed to fetch jobs:', err)
+        toast.error('Failed to load recent jobs', {
+          description: 'Please refresh the page to try again.',
+        })
       }
 
       setLoadingJobs(false)
@@ -131,6 +137,7 @@ function DashboardContent() {
         }
       } catch (err) {
         console.error('Failed to fetch billing info:', err)
+        // Silent fail for billing - not critical for dashboard use
       }
       setLoadingBilling(false)
 
@@ -142,6 +149,9 @@ function DashboardContent() {
         setOutputLanguages(library.output_languages)
       } catch (err) {
         console.error('Failed to fetch voice library:', err)
+        toast.error('Failed to load voice library', {
+          description: 'Using default voices. Please refresh to try again.',
+        })
         // Keep using fallback voices/languages
       }
       setLoadingVoiceLibrary(false)
@@ -152,6 +162,7 @@ function DashboardContent() {
         setGoogleDriveStatus(driveStatus)
       } catch (err) {
         console.error('Failed to fetch Google Drive status:', err)
+        // Silent fail for Google Drive - not critical
       }
     }
 
@@ -173,7 +184,9 @@ function DashboardContent() {
       setGoogleDriveFiles(response.files)
     } catch (err) {
       console.error('Failed to fetch Drive files:', err)
-      setCreateError('Failed to load Google Drive files')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load Google Drive files'
+      setCreateError(errorMessage)
+      toast.error('Failed to load Google Drive files', { description: errorMessage })
     }
     setLoadingDriveFiles(false)
   }
@@ -185,7 +198,9 @@ function DashboardContent() {
       window.location.href = auth_url
     } catch (err) {
       console.error('Failed to get Google Drive auth URL:', err)
-      setCreateError('Failed to connect to Google Drive')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to Google Drive'
+      setCreateError(errorMessage)
+      toast.error('Google Drive connection failed', { description: errorMessage })
     }
   }
 
@@ -234,6 +249,13 @@ function DashboardContent() {
     setPreviewLoading(true)
     setPreviewAudio(null)
 
+    // Clean up previous audio to prevent memory leak
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+      audioRef.current = null
+    }
+
     // Show loading toast
     const loadingToast = toast.loading('Generating voice preview...')
 
@@ -251,8 +273,9 @@ function DashboardContent() {
         const audioUrl = `data:audio/mp3;base64,${response.audio_base64}`
         setPreviewAudio(audioUrl)
 
-        // Auto-play the preview
+        // Auto-play the preview using ref to allow cleanup
         const audio = new Audio(audioUrl)
+        audioRef.current = audio
         audio.play().catch(console.error)
 
         toast.success('Voice preview ready!', { id: loadingToast })
@@ -269,6 +292,17 @@ function DashboardContent() {
 
     setPreviewLoading(false)
   }
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+        audioRef.current = null
+      }
+    }
+  }, [])
 
   // File dropzone
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -892,6 +926,14 @@ function DashboardContent() {
       </PageShell>
 
       <Footer user={user} />
+
+      {/* Onboarding tour - only shown for new users with no jobs */}
+      {!loadingJobs && (
+        <OnboardingTour
+          tourType="dashboard"
+          isNewUser={jobs.length === 0}
+        />
+      )}
     </>
   )
 }
@@ -900,7 +942,6 @@ export default function DashboardPage() {
   return (
     <AuthWrapper>
       <DashboardContent />
-      <OnboardingTour tourType="dashboard" />
     </AuthWrapper>
   )
 }

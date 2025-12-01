@@ -112,7 +112,14 @@
   }
 
   select.input-field option {
-    @apply bg-gray-900 text-white py-2;
+    @apply bg-af-dark text-white py-2;
+  }
+
+  /* Native select dropdown styling for dark themes */
+  select option {
+    background-color: #0f0a1f; /* af-dark */
+    color: white;
+    padding: 8px;
   }
 
   /* Particle animation container */

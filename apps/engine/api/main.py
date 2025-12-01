@@ -603,7 +603,7 @@ async def create_job(
             db.increment_user_usage(user_id, projects=1, minutes=0)
         except Exception as e:
             # Log but don't fail - usage tracking shouldn't block job creation
-            print(f"Warning: Failed to increment usage for user {user_id}: {e}")
+            logger.warning(f"Failed to increment usage for user {user_id}: {e}")
 
     # Enqueue job for processing
     await enqueue_job(job["id"])
@@ -751,7 +751,7 @@ async def create_job_with_upload(
         try:
             db.increment_user_usage(user_id, projects=1, minutes=0)
         except Exception as e:
-            print(f"Warning: Failed to increment usage for user {user_id}: {e}")
+            logger.warning(f"Failed to increment usage for user {user_id}: {e}")
 
     # Enqueue job for processing
     await enqueue_job(job["id"])
@@ -1144,13 +1144,13 @@ async def delete_job(
         if job["source_path"]:
             db.delete_storage_file("manuscripts", job["source_path"])
     except Exception as e:
-        print(f"⚠️ Failed to delete manuscript for job {job_id}: {e}")
+        logger.warning(f"Failed to delete manuscript for job {job_id}: {e}")
 
     try:
         if job["audio_path"]:
             db.delete_storage_file("audiobooks", job["audio_path"])
     except Exception as e:
-        print(f"⚠️ Failed to delete audiobook for job {job_id}: {e}")
+        logger.warning(f"Failed to delete audiobook for job {job_id}: {e}")
 
     # Delete job from database (CASCADE deletes job_files)
     db.delete_job(job_id)
@@ -2424,7 +2424,7 @@ async def google_drive_oauth_callback(
             url=f"{frontend_url}/dashboard?googleDrive=connected"
         )
     except Exception as e:
-        print(f"Google Drive OAuth error: {e}")
+        logger.error(f"Google Drive OAuth error: {e}")
         return RedirectResponse(
             url=f"{frontend_url}/dashboard?googleDrive=error&message=token_exchange_failed"
         )
@@ -2802,7 +2802,7 @@ async def get_system_status(
 
         total_jobs = len(all_jobs.data) if all_jobs.data else 0
     except Exception as e:
-        print(f"Error fetching job stats: {e}")
+        logger.error(f"Error fetching job stats: {e}")
         total_jobs = 0
         status_counts = {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
 
@@ -2815,7 +2815,7 @@ async def get_system_status(
         # Count total users (estimate from billing records)
         total_users = len(billing_data.data) if billing_data.data else 0
     except Exception as e:
-        print(f"Error fetching user stats: {e}")
+        logger.error(f"Error fetching user stats: {e}")
         total_users = 0
         active_subs = 0
 
@@ -2837,7 +2837,7 @@ async def get_system_status(
             for job in (failed_jobs.data or [])
         ]
     except Exception as e:
-        print(f"Error fetching recent errors: {e}")
+        logger.error(f"Error fetching recent errors: {e}")
         recent_errors = []
 
     # Check feature flags
