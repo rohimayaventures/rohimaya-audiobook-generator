@@ -122,7 +122,7 @@ export async function proxy(request: NextRequest) {
       value: now.toString(),
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict', // CSRF protection - changed from 'lax' to 'strict'
       maxAge: 60 * 60 * 24, // 24 hours
     })
   }

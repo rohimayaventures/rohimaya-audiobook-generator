@@ -83,6 +83,46 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # ============================================================================
+# CSRF PROTECTION MIDDLEWARE
+# ============================================================================
+
+@app.middleware("http")
+async def csrf_protection_middleware(request: Request, call_next):
+    """
+    CSRF protection middleware - validates Origin/Referer headers for state-changing requests.
+    """
+    # Only check state-changing methods
+    if request.method in ["POST", "PUT", "PATCH", "DELETE"]:
+        # Get origin and referer headers
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+
+        # Parse allowed origins
+        allowed_origins_set = set(ALLOWED_ORIGINS)
+
+        # Check if origin matches allowed origins
+        origin_valid = False
+        if origin:
+            origin_valid = origin in allowed_origins_set
+        elif referer:
+            # If no origin, check referer
+            from urllib.parse import urlparse
+            referer_origin = f"{urlparse(referer).scheme}://{urlparse(referer).netloc}"
+            origin_valid = referer_origin in allowed_origins_set
+
+        # Reject if origin doesn't match
+        if not origin_valid and request.url.path not in ["/health", "/api/webhooks/stripe"]:
+            logger.warning(f"[CSRF] Blocked request from origin: {origin or referer} to {request.url.path}")
+            return JSONResponse(
+                status_code=403,
+                content={"error": "forbidden", "message": "Invalid origin"}
+            )
+
+    response = await call_next(request)
+    return response
+
+
+# ============================================================================
 # GLOBAL EXCEPTION HANDLERS
 # ============================================================================
 
