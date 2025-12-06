@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
-import type { Step, CallBackProps } from 'react-joyride'
-import { STATUS } from 'react-joyride'
+import type { Step, CallBackProps } from '@adi-prasetyo/react-joyride'
+import { STATUS } from '@adi-prasetyo/react-joyride'
 
 // Dynamic import to avoid SSR issues with react-joyride
-const Joyride = dynamic(() => import('react-joyride'), { ssr: false })
+const Joyride = dynamic(() => import('@adi-prasetyo/react-joyride'), { ssr: false })
 
 // ============================================================================
 // TOUR STEP DEFINITIONS
@@ -326,9 +326,6 @@ export function OnboardingTour({
         last: 'Got it!',
         next: 'Next',
         skip: 'Skip tour',
-      }}
-      floaterProps={{
-        disableAnimation: true,
       }}
     />
   )
