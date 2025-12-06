@@ -64,6 +64,10 @@ const getSegmentLabel = (type: string): string => {
       return 'Chapter'
     case 'back_matter':
       return 'Back Matter'
+    case 'bonus_chapter':
+      return 'Bonus Chapter'
+    case 'teaser_chapter':
+      return 'Teaser'
     case 'opening_credits':
       return 'Opening'
     case 'closing_credits':
@@ -84,6 +88,10 @@ const getSegmentColor = (type: string): string => {
       return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
     case 'back_matter':
       return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+    case 'bonus_chapter':
+      return 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+    case 'teaser_chapter':
+      return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
     case 'opening_credits':
       return 'bg-green-500/20 text-green-400 border-green-500/30'
     case 'closing_credits':
@@ -138,7 +146,10 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
   }
 
   // Change segment type
-  const handleSegmentTypeChange = async (chapter: Chapter, segmentType: 'front_matter' | 'body_chapter' | 'back_matter') => {
+  const handleSegmentTypeChange = async (
+    chapter: Chapter,
+    segmentType: 'front_matter' | 'body_chapter' | 'back_matter' | 'bonus_chapter' | 'teaser_chapter'
+  ) => {
     setSaving(true)
     try {
       const updated = await updateChapter(job.id, chapter.id, { segment_type: segmentType })
@@ -414,10 +425,10 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
                   {/* Segment type dropdown */}
                   <select
                     value={chapter.segment_type}
-                    onChange={(e) => handleSegmentTypeChange(chapter, e.target.value as 'front_matter' | 'body_chapter' | 'back_matter')}
-                    className="bg-af-dark border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white cursor-pointer hover:border-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-af-purple/50 appearance-none"
+                    onChange={(e) => handleSegmentTypeChange(chapter, e.target.value as 'front_matter' | 'body_chapter' | 'back_matter' | 'bonus_chapter' | 'teaser_chapter')}
+                    className="bg-[#1a1a2e] border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white cursor-pointer hover:border-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-af-purple/50 appearance-none"
                     style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgb(139,92,246)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
                       backgroundRepeat: 'no-repeat',
                       backgroundPosition: 'right 8px center',
                       backgroundSize: '16px',
@@ -425,9 +436,11 @@ export default function ChapterReview({ job, onApproved }: ChapterReviewProps) {
                     }}
                     aria-label={`Segment type for ${chapter.display_title || chapter.title}`}
                   >
-                    <option value="front_matter" className="bg-af-dark text-white">Front Matter</option>
-                    <option value="body_chapter" className="bg-af-dark text-white">Chapter</option>
-                    <option value="back_matter" className="bg-af-dark text-white">Back Matter</option>
+                    <option value="front_matter" style={{ backgroundColor: '#1a1a2e', color: 'white' }}>Front Matter</option>
+                    <option value="body_chapter" style={{ backgroundColor: '#1a1a2e', color: 'white' }}>Chapter</option>
+                    <option value="back_matter" style={{ backgroundColor: '#1a1a2e', color: 'white' }}>Back Matter</option>
+                    <option value="bonus_chapter" style={{ backgroundColor: '#1a1a2e', color: 'white' }}>Bonus Chapter</option>
+                    <option value="teaser_chapter" style={{ backgroundColor: '#1a1a2e', color: 'white' }}>Teaser</option>
                   </select>
 
                   {/* Preview toggle */}

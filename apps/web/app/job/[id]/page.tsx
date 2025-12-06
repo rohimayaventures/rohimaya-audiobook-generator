@@ -24,7 +24,7 @@ import { Navbar, Footer, PageShell, AuthWrapper } from '@/components/layout'
 import { ChapterReview, RetailSampleReview } from '@/components/chapters'
 import { TracksView } from '@/components/tracks'
 import { getCurrentUser } from '@/lib/supabaseClient'
-import { getJob, getJobDownloadUrl, cancelJob, retryJob, getRetailSamples, type Job, type RetailSample } from '@/lib/apiClient'
+import { getJob, getJobDownloadUrl, cancelJob, retryJob, deleteJob, getRetailSamples, type Job, type RetailSample } from '@/lib/apiClient'
 import { signOut } from '@/lib/auth'
 
 // Step definitions for the workflow
@@ -294,6 +294,20 @@ function JobDetailContent() {
     setRetrying(false)
   }
 
+  const handleDelete = async () => {
+    if (!job) return
+
+    const confirmMessage = `Are you sure you want to delete "${job.title}"? This action cannot be undone.`
+    if (!window.confirm(confirmMessage)) return
+
+    try {
+      await deleteJob(job.id)
+      router.push('/library')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete job')
+    }
+  }
+
   // Handle retail sample confirmed
   const handleRetailSampleConfirmed = (sample: RetailSample) => {
     setRetailSamples(prev => prev.map(s =>
@@ -529,6 +543,12 @@ function JobDetailContent() {
                   <SecondaryButton href="/dashboard">
                     Create new job
                   </SecondaryButton>
+                  <button
+                    onClick={handleDelete}
+                    className="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    Delete Job
+                  </button>
                 </div>
               </GlassCard>
             )}
@@ -544,11 +564,26 @@ function JobDetailContent() {
                   <PrimaryButton href="/dashboard">
                     Create New Audiobook
                   </PrimaryButton>
-                  <SecondaryButton href="/library">
-                    Back to Library
-                  </SecondaryButton>
+                  <button
+                    onClick={handleDelete}
+                    className="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    Delete Job
+                  </button>
                 </div>
               </GlassCard>
+            )}
+
+            {/* Chapters Pending - Add delete option here too */}
+            {job.status === 'chapters_pending' && (
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={handleDelete}
+                  className="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-sm"
+                >
+                  Delete Job
+                </button>
+              </div>
             )}
 
             {/* Completed State - Retail Sample + Tracks */}

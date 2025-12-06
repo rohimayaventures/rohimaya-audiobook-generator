@@ -361,8 +361,8 @@ function LibraryContent() {
                     </PrimaryButton>
                   )}
 
-                  {/* Delete button for completed, failed, or cancelled jobs */}
-                  {(job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
+                  {/* Delete button - allow deletion unless actively processing */}
+                  {(job.status !== 'processing' && job.status !== 'parsing') && (
                     <button
                       onClick={() => handleDelete(job.id, job.title)}
                       disabled={deleting === job.id}

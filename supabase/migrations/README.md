@@ -95,6 +95,20 @@ Adds strict Findaway segment ordering:
 **View:**
 - `job_segments_ordered` - All segments in correct Findaway order with export filenames
 
+### ✅ 0009_bonus_teaser_segments.sql
+Adds bonus chapter and teaser chapter segment types:
+
+**New segment types:**
+- `bonus_chapter` (segment_order 90-94) - Up to 5 bonus chapters (deleted scenes, extended epilogues, etc.)
+- `teaser_chapter` (segment_order 95-97) - Up to 3 teaser chapters (sneak peeks, excerpts, etc.)
+
+**Updated functions:**
+- `get_next_segment_order()` - Now supports bonus_chapter and teaser_chapter types
+- `validate_segment_order()` - Validates ranges for new segment types
+
+**Updated view:**
+- `job_segments_ordered` - Generates filenames like `90_bonus_01.mp3`, `95_teaser_01.mp3`
+
 ## Running Migrations
 
 ### Prerequisites
@@ -316,9 +330,11 @@ The trigger `validate_segment_order` enforces strict ranges. If you get errors:
 - `front_matter` must have segment_order between 1-9
 - `body_chapter` must have segment_order between 10-79
 - `back_matter` must have segment_order between 80-89
+- `bonus_chapter` must have segment_order between 90-94
+- `teaser_chapter` must have segment_order between 95-97
 - `closing_credits` must have segment_order = 98
 - `retail_sample` must have segment_order = 99
 
 ---
-**Last Updated:** 2025-11-29
-**Migration Version:** 0008
+**Last Updated:** 2025-12-04
+**Migration Version:** 0009

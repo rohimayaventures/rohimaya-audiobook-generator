@@ -6,8 +6,9 @@ Supports:
 - CHAPTER 1, Chapter One, CHAPTER I (Roman numerals)
 - Part I, Part 1, Part One
 - Prologue, Epilogue, Afterword, etc.
-- Section breaks (*** or ---)
-- Numbered sections without "Chapter" prefix
+- Teaser/Bonus/Sample chapters (for back matter)
+- Front matter sections (Title Page, Copyright, Author's Note, etc.)
+- POV marker and scene break filtering (prevents over-counting)
 """
 
 import re
@@ -17,7 +18,68 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# Chapter header patterns (order matters - more specific first)
+# ============================================================================
+# SKIP PATTERNS - Lines that should NOT be treated as chapter boundaries
+# These prevent POV markers, scene breaks, and decorative dividers from
+# creating spurious chapters.
+# ============================================================================
+SKIP_PATTERNS = [
+    # POV markers with asterisks: *** ARIA ***, *** Aria's POV ***
+    r"^\s*\*+\s*[A-Za-z]+(?:'s)?\s*(?:POV)?\s*\*+\s*$",
+    # POV markers with tildes: ~~~ VIHAN ~~~
+    r"^\s*~+\s*[A-Za-z]+\s*~+\s*$",
+    # POV markers with dashes: --- ARIA ---
+    r"^\s*-+\s*[A-Za-z]+\s*-+\s*$",
+    # Generic scene breaks: ***, ---, ~~~, ===
+    r"^\s*[\*\-~=]{3,}\s*$",
+    # Scene breaks with spaces: * * *, - - -, ~ ~ ~
+    r"^\s*(\*\s+){2,}\*?\s*$",
+    r"^\s*(-\s+){2,}-?\s*$",
+    r"^\s*(\~\s+){2,}\~?\s*$",
+    # Decorative Unicode dividers
+    r"^\s*[✧❖♦◆●○★☆✦✶✴✳✲✱✰✯✮✭✬✫✪✩✨§†‡•‣⁃◦◘◙◌◍◎◐◑◒◓◔◕◖◗]{2,}\s*$",
+    # POV labels: POV: Aria, [POV: Vihan], (Aria's POV)
+    r"^\s*\[?\s*POV\s*:\s*[A-Za-z]+\s*\]?\s*$",
+    r"^\s*\(\s*[A-Za-z]+(?:'s)?\s+POV\s*\)\s*$",
+    # Character name with POV: Aria's POV, VIHAN POV
+    r"^\s*[A-Za-z]+(?:'s)?\s+POV\s*$",
+    # Simple character names on their own line (all caps, likely POV indicator)
+    r"^\s*[A-Z]{2,}\s*$",
+]
+
+# Compile skip patterns for efficiency
+_COMPILED_SKIP_PATTERNS = [re.compile(p, re.IGNORECASE) for p in SKIP_PATTERNS]
+
+
+def _should_skip_line(line: str) -> bool:
+    """
+    Check if a line is a POV marker, scene break, or decorative divider
+    that should NOT be treated as a chapter boundary.
+
+    These lines are included as content within the current chapter,
+    not treated as structural markers.
+
+    Args:
+        line: The line to check
+
+    Returns:
+        True if the line should be skipped as a chapter boundary
+    """
+    stripped = line.strip()
+    if not stripped:
+        return False
+
+    for pattern in _COMPILED_SKIP_PATTERNS:
+        if pattern.match(stripped):
+            logger.debug(f"[PARSER] Skipping POV/divider line: {stripped[:40]}...")
+            return True
+    return False
+
+
+# ============================================================================
+# CHAPTER HEADER PATTERNS
+# Order matters - more specific patterns first
+# ============================================================================
 CHAPTER_PATTERNS = [
     # Explicit "Chapter" with number
     (r"^\s*CHAPTER\s+(\d+)\s*[:\.\-]?\s*(.*)$", "chapter_num"),
@@ -38,18 +100,49 @@ CHAPTER_PATTERNS = [
     (r"^\s*Part\s+(One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten)\s*[:\.\-]?\s*(.*)$", "part_word"),
     (r"^\s*PART\s+([IVXLC]+)\s*[:\.\-]?\s*(.*)$", "part_roman"),
 
-    # Special sections (prologue, epilogue, etc.)
+    # ========================================================================
+    # FRONT MATTER SECTIONS
+    # ========================================================================
     (r"^\s*(PROLOGUE|Prologue)\s*[:\.\-]?\s*(.*)$", "prologue"),
-    (r"^\s*(EPILOGUE|Epilogue)\s*[:\.\-]?\s*(.*)$", "epilogue"),
-    (r"^\s*(AFTERWORD|Afterword)\s*[:\.\-]?\s*(.*)$", "afterword"),
     (r"^\s*(FOREWORD|Foreword)\s*[:\.\-]?\s*(.*)$", "foreword"),
     (r"^\s*(PREFACE|Preface)\s*[:\.\-]?\s*(.*)$", "preface"),
     (r"^\s*(INTRODUCTION|Introduction)\s*[:\.\-]?\s*(.*)$", "introduction"),
     (r"^\s*(DEDICATION|Dedication)\s*[:\.\-]?\s*(.*)$", "dedication"),
+    # Additional front matter patterns
+    (r"^\s*(TITLE\s+PAGE|Title\s+Page)\s*[:\.\-]?\s*(.*)$", "title_page"),
+    (r"^\s*(COPYRIGHT|Copyright)\s*[:\.\-]?\s*(.*)$", "copyright"),
+    (r"^\s*(AUTHOR'?S?\s+NOTE|Author'?s?\s+Note)\s*[:\.\-]?\s*(.*)$", "authors_note"),
+    (r"^\s*(CONTENT\s+WARNING|Content\s+Warning)\s*[:\.\-]?\s*(.*)$", "content_warning"),
+    (r"^\s*(TRIGGER\s+WARNING|Trigger\s+Warning)\s*[:\.\-]?\s*(.*)$", "content_warning"),
+    (r"^\s*(NOTE\s+TO\s+READERS?|Note\s+to\s+Readers?)\s*[:\.\-]?\s*(.*)$", "authors_note"),
+    (r"^\s*(ALSO\s+BY|Also\s+By)\s*[:\.\-]?\s*(.*)$", "also_by"),
+
+    # ========================================================================
+    # BACK MATTER SECTIONS
+    # ========================================================================
+    (r"^\s*(EPILOGUE|Epilogue)\s*[:\.\-]?\s*(.*)$", "epilogue"),
+    (r"^\s*(AFTERWORD|Afterword)\s*[:\.\-]?\s*(.*)$", "afterword"),
     (r"^\s*(ACKNOWLEDGMENTS?|Acknowledgments?)\s*[:\.\-]?\s*(.*)$", "acknowledgments"),
     (r"^\s*(ABOUT\s+THE\s+AUTHOR|About\s+the\s+Author)\s*[:\.\-]?\s*(.*)$", "about_author"),
     (r"^\s*(GLOSSARY|Glossary)\s*[:\.\-]?\s*(.*)$", "glossary"),
     (r"^\s*(APPENDIX|Appendix)\s*[:\.\-]?\s*(.*)$", "appendix"),
+
+    # ========================================================================
+    # TEASER/BONUS/SAMPLE CHAPTERS (for back matter)
+    # These do NOT count as main body chapters
+    # ========================================================================
+    (r"^\s*(SNEAK\s+PEEK|Sneak\s+Peek)\s*[:\.\-]?\s*(.*)$", "teaser"),
+    (r"^\s*(BONUS\s+CHAPTER|Bonus\s+Chapter)\s*[:\.\-]?\s*(.*)$", "bonus"),
+    (r"^\s*(EXCERPT\s+FROM|Excerpt\s+from)\s*[:\.\-]?\s*(.*)$", "teaser"),
+    (r"^\s*(SAMPLE\s+CHAPTER|Sample\s+Chapter)\s*[:\.\-]?\s*(.*)$", "teaser"),
+    (r"^\s*(TEASER|Teaser)\s*[:\.\-]?\s*(.*)$", "teaser"),
+    (r"^\s*(PREVIEW\s+OF|Preview\s+of)\s*[:\.\-]?\s*(.*)$", "teaser"),
+    (r"^\s*(COMING\s+SOON|Coming\s+Soon)\s*[:\.\-]?\s*(.*)$", "teaser"),
+    (r"^\s*(BONUS\s+CONTENT|Bonus\s+Content)\s*[:\.\-]?\s*(.*)$", "bonus"),
+    (r"^\s*(DELETED\s+SCENE|Deleted\s+Scene)\s*[:\.\-]?\s*(.*)$", "bonus"),
+    (r"^\s*(EXTRA\s+SCENE|Extra\s+Scene)\s*[:\.\-]?\s*(.*)$", "bonus"),
+    (r"^\s*(BONUS\s+EPILOGUE|Bonus\s+Epilogue)\s*[:\.\-]?\s*(.*)$", "bonus"),
+    (r"^\s*(EXTENDED\s+EPILOGUE|Extended\s+Epilogue)\s*[:\.\-]?\s*(.*)$", "bonus"),
 ]
 
 # Word to number mapping
@@ -72,24 +165,41 @@ ROMAN_TO_NUM = {
 }
 
 # Section type to segment type mapping (for Findaway)
+# Maps pattern types to their corresponding segment types
 SECTION_TO_SEGMENT = {
+    # Front matter (segment_order 1-9)
     "prologue": "front_matter",
     "foreword": "front_matter",
     "preface": "front_matter",
     "introduction": "front_matter",
     "dedication": "front_matter",
+    "title_page": "front_matter",
+    "copyright": "front_matter",
+    "authors_note": "front_matter",
+    "content_warning": "front_matter",
+    "also_by": "front_matter",
+
+    # Body chapters (segment_order 10-79)
     "chapter_num": "body_chapter",
     "chapter_word": "body_chapter",
     "chapter_roman": "body_chapter",
     "part_num": "body_chapter",
     "part_word": "body_chapter",
     "part_roman": "body_chapter",
+
+    # Back matter (segment_order 80-89)
     "epilogue": "back_matter",
     "afterword": "back_matter",
     "acknowledgments": "back_matter",
     "about_author": "back_matter",
     "glossary": "back_matter",
     "appendix": "back_matter",
+
+    # Bonus chapters (segment_order 90-94)
+    "bonus": "bonus_chapter",
+
+    # Teaser chapters (segment_order 95-97)
+    "teaser": "teaser_chapter",
 }
 
 
@@ -181,10 +291,19 @@ def split_into_chapters(
         current_lines = []
         current_chapter = None
 
-    # Compile scene break pattern if needed
+    # Compile scene break pattern if needed (only used when detect_scene_breaks=True)
     scene_break_pattern = re.compile(r"^\s*(\*\s*\*\s*\*|\-\s*\-\s*\-|~\s*~\s*~)\s*$")
 
     for line in lines:
+        # FIRST: Check if this line is a POV marker, scene break, or decorative divider
+        # that should be skipped as a chapter boundary but included as content
+        if _should_skip_line(line):
+            # Include the line as content in the current chapter, don't treat as boundary
+            if current_chapter is not None:
+                current_lines.append(line)
+            # If no chapter yet, just skip the line (it's likely a stray divider at the start)
+            continue
+
         # Check for chapter header
         header_match = _match_chapter_header(line)
 
@@ -194,13 +313,15 @@ def split_into_chapters(
             # Flush previous chapter
             flush_chapter()
 
-            # Determine title
+            # Determine title based on pattern type
             if title_part:
                 title = title_part
             elif pattern_type in ("prologue", "epilogue", "afterword", "foreword",
                                   "preface", "introduction", "dedication",
-                                  "acknowledgments", "about_author", "glossary", "appendix"):
-                title = number_part.title()  # "Prologue", "Epilogue", etc.
+                                  "acknowledgments", "about_author", "glossary", "appendix",
+                                  "title_page", "copyright", "authors_note", "content_warning",
+                                  "also_by", "teaser", "bonus"):
+                title = number_part.title()  # Use matched text as title
             else:
                 # Use number in title
                 num = _convert_to_number(number_part, pattern_type)
@@ -219,7 +340,8 @@ def split_into_chapters(
             }
 
         elif detect_scene_breaks and scene_break_pattern.match(line):
-            # Scene break - start new section
+            # Scene break - start new section (only when explicitly enabled)
+            # Note: This is disabled by default to prevent over-counting
             flush_chapter()
             current_chapter = {
                 "title": f"Section {source_order + 1}",
@@ -233,7 +355,7 @@ def split_into_chapters(
                 current_lines.append(line)
             else:
                 # Content before first chapter header
-                # Start an implicit chapter
+                # Start an implicit chapter for front matter
                 current_chapter = {
                     "title": "Opening",
                     "segment_type": "front_matter",
@@ -411,15 +533,25 @@ def get_segment_type_order(segment_type: str) -> int:
     """
     Get sort order for segment types (for Findaway-style ordering).
 
-    Order: opening_credits < front_matter < body_chapter < back_matter < closing_credits < retail_sample
+    Order:
+    0 = opening_credits
+    1 = front_matter
+    2 = body_chapter
+    3 = back_matter
+    4 = bonus_chapter
+    5 = teaser_chapter
+    6 = closing_credits
+    7 = retail_sample
     """
     order_map = {
         "opening_credits": 0,
         "front_matter": 1,
         "body_chapter": 2,
         "back_matter": 3,
-        "closing_credits": 4,
-        "retail_sample": 5,
+        "bonus_chapter": 4,
+        "teaser_chapter": 5,
+        "closing_credits": 6,
+        "retail_sample": 7,
     }
     return order_map.get(segment_type, 2)
 
@@ -433,6 +565,8 @@ def calculate_segment_order(segment_type: str, index_within_type: int) -> int:
     - 1-9: Front matter (up to 9 items)
     - 10-79: Body chapters (up to 70 chapters)
     - 80-89: Back matter (up to 10 items)
+    - 90-94: Bonus chapters (up to 5 items)
+    - 95-97: Teaser chapters (up to 3 items)
     - 98: Closing credits
     - 99: Retail sample
 
@@ -446,11 +580,15 @@ def calculate_segment_order(segment_type: str, index_within_type: int) -> int:
     if segment_type == "opening_credits":
         return 0
     elif segment_type == "front_matter":
-        return min(1 + index_within_type, 9)  # Cap at 9
+        return min(1 + index_within_type, 9)  # 1-9
     elif segment_type == "body_chapter":
-        return min(10 + index_within_type, 79)  # Cap at 79
+        return min(10 + index_within_type, 79)  # 10-79
     elif segment_type == "back_matter":
-        return min(80 + index_within_type, 89)  # Cap at 89
+        return min(80 + index_within_type, 89)  # 80-89
+    elif segment_type == "bonus_chapter":
+        return min(90 + index_within_type, 94)  # 90-94
+    elif segment_type == "teaser_chapter":
+        return min(95 + index_within_type, 97)  # 95-97
     elif segment_type == "closing_credits":
         return 98
     elif segment_type == "retail_sample":
@@ -472,6 +610,16 @@ def assign_segment_orders(chapters: List[Dict]) -> List[Dict]:
     The returned chapters are sorted by segment_order for correct
     Findaway export ordering.
 
+    Segment order ranges:
+    - 0: Opening credits
+    - 1-9: Front matter
+    - 10-79: Body chapters
+    - 80-89: Back matter
+    - 90-94: Bonus chapters
+    - 95-97: Teaser chapters
+    - 98: Closing credits
+    - 99: Retail sample
+
     Args:
         chapters: List of chapter dicts with segment_type set
 
@@ -483,6 +631,8 @@ def assign_segment_orders(chapters: List[Dict]) -> List[Dict]:
         "front_matter": [],
         "body_chapter": [],
         "back_matter": [],
+        "bonus_chapter": [],
+        "teaser_chapter": [],
     }
 
     for chapter in chapters:
@@ -512,6 +662,18 @@ def assign_segment_orders(chapters: List[Dict]) -> List[Dict]:
     for i, ch in enumerate(by_type["back_matter"]):
         ch = ch.copy()
         ch["segment_order"] = calculate_segment_order("back_matter", i)
+        result.append(ch)
+
+    # Bonus chapters (90-94)
+    for i, ch in enumerate(by_type["bonus_chapter"]):
+        ch = ch.copy()
+        ch["segment_order"] = calculate_segment_order("bonus_chapter", i)
+        result.append(ch)
+
+    # Teaser chapters (95-97)
+    for i, ch in enumerate(by_type["teaser_chapter"]):
+        ch = ch.copy()
+        ch["segment_order"] = calculate_segment_order("teaser_chapter", i)
         result.append(ch)
 
     # Sort by segment_order
@@ -560,8 +722,10 @@ def generate_display_title(chapter: Dict) -> str:
 FINDAWAY_PREFIXES = {
     "opening_credits": "00",
     "front_matter": "01",  # Can increment: 01, 02, ..., 09
-    "body_chapter": "10",  # Starts at 10, increments: 10, 11, 12, ...
+    "body_chapter": "10",  # Starts at 10, increments: 10, 11, 12, ..., 79
     "back_matter": "80",   # Can increment: 80, 81, ..., 89
+    "bonus_chapter": "90", # Can increment: 90, 91, ..., 94
+    "teaser_chapter": "95", # Can increment: 95, 96, 97
     "closing_credits": "98",
     "retail_sample": "99",
 }
@@ -624,6 +788,16 @@ def generate_findaway_filename(
         prefix = f"{80 + index_within_type:02d}"
         if int(prefix) > 89:
             prefix = "89"  # Cap at 89
+    elif segment_type == "bonus_chapter":
+        # Bonus chapters: 90-94
+        prefix = f"{90 + index_within_type:02d}"
+        if int(prefix) > 94:
+            prefix = "94"  # Cap at 94
+    elif segment_type == "teaser_chapter":
+        # Teaser chapters: 95-97
+        prefix = f"{95 + index_within_type:02d}"
+        if int(prefix) > 97:
+            prefix = "97"  # Cap at 97
     elif segment_type == "closing_credits":
         prefix = "98"
     elif segment_type == "retail_sample":
@@ -634,9 +808,13 @@ def generate_findaway_filename(
     # Generate safe filename from title
     safe_title = sanitize_title_for_filename(title.lower(), max_length=40)
 
-    # For body chapters, use consistent naming
+    # Use consistent naming for body chapters, bonus chapters, and teaser chapters
     if segment_type == "body_chapter":
         safe_title = f"chapter_{index_within_type + 1:02d}"
+    elif segment_type == "bonus_chapter":
+        safe_title = f"bonus_{index_within_type + 1:02d}"
+    elif segment_type == "teaser_chapter":
+        safe_title = f"teaser_{index_within_type + 1:02d}"
 
     return f"{prefix}_{safe_title}.{extension}"
 
@@ -678,6 +856,8 @@ def generate_track_list_from_chapters(
     front_matter_count = 0
     body_chapter_count = 0
     back_matter_count = 0
+    bonus_chapter_count = 0
+    teaser_chapter_count = 0
 
     # 1. Opening credits
     if include_credits:
@@ -711,6 +891,12 @@ def generate_track_list_from_chapters(
         elif seg_type == "back_matter":
             export_filename = generate_findaway_filename("back_matter", back_matter_count, title)
             back_matter_count += 1
+        elif seg_type == "bonus_chapter":
+            export_filename = generate_findaway_filename("bonus_chapter", bonus_chapter_count, title)
+            bonus_chapter_count += 1
+        elif seg_type == "teaser_chapter":
+            export_filename = generate_findaway_filename("teaser_chapter", teaser_chapter_count, title)
+            teaser_chapter_count += 1
         else:
             # Default to body chapter
             export_filename = generate_findaway_filename("body_chapter", body_chapter_count, title)

@@ -132,14 +132,17 @@ def extract_text_from_file(file_content: bytes, source_path: str) -> str:
         return text
 
     # DOCX files - extract from XML in ZIP with heading detection
+    # NOTE: We preserve original heading text WITHOUT auto-adding "CHAPTER X:" prefixes.
+    # This prevents over-counting chapters from POV markers, author notes, etc.
+    # The chapter_parser.py will detect actual chapter headers via regex patterns.
     elif ext == ".docx":
         try:
             import zipfile
             import xml.etree.ElementTree as ET
 
-            logger.info("[EXTRACT] Extracting text from DOCX file with heading detection")
+            logger.info("[EXTRACT] Extracting text from DOCX file (preserving original headings)")
             text_parts = []
-            chapter_count = 0
+            heading_count = 0
 
             # Word XML namespace
             W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -214,25 +217,17 @@ def extract_text_from_file(file_content: bytes, source_path: str) -> str:
                         if para_texts:
                             para_text = "".join(para_texts)
 
-                            # If it's a heading, add chapter marker
+                            # Track headings for logging but DO NOT modify the text
+                            # The chapter_parser will detect chapters via its own regex patterns
+                            # This prevents over-counting from POV markers, dedications, etc.
                             if is_heading and heading_level <= 2:
-                                # Check if text already contains "Chapter" or similar
-                                text_lower = para_text.lower().strip()
-                                has_chapter_marker = any(marker in text_lower for marker in [
-                                    "chapter", "part", "prologue", "epilogue",
-                                    "introduction", "preface", "afterword"
-                                ])
-
-                                if not has_chapter_marker:
-                                    # Add "CHAPTER X:" prefix to help parser
-                                    chapter_count += 1
-                                    para_text = f"CHAPTER {chapter_count}: {para_text}"
-                                    logger.debug(f"[EXTRACT] Detected heading as chapter: {para_text[:50]}...")
+                                heading_count += 1
+                                logger.debug(f"[EXTRACT] Found H{heading_level} heading: {para_text[:60]}...")
 
                             text_parts.append(para_text)
 
             text = "\n\n".join(text_parts)
-            logger.info(f"[EXTRACT] Extracted {len(text)} chars from DOCX ({len(text_parts)} paragraphs, {chapter_count} headings converted to chapters)")
+            logger.info(f"[EXTRACT] Extracted {len(text)} chars from DOCX ({len(text_parts)} paragraphs, {heading_count} headings detected)")
             return text
 
         except Exception as e:
@@ -262,7 +257,7 @@ def extract_text_from_file(file_content: bytes, source_path: str) -> str:
             logger.error(f"[EXTRACT] PDF extraction failed: {e}")
             raise ValueError(f"Failed to extract text from PDF: {e}")
 
-    # HTML files - strip tags
+    # HTML files - strip tags while preserving structure
     elif ext in (".html", ".htm"):
         try:
             import re
@@ -274,15 +269,30 @@ def extract_text_from_file(file_content: bytes, source_path: str) -> str:
             # Remove script and style elements
             html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
             html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<nav[^>]*>.*?</nav>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<header[^>]*>.*?</header>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            html = re.sub(r'<footer[^>]*>.*?</footer>', '', html, flags=re.DOTALL | re.IGNORECASE)
 
-            # Replace block elements with newlines
-            html = re.sub(r'<(p|div|br|h[1-6]|li)[^>]*>', '\n', html, flags=re.IGNORECASE)
+            # Preserve heading structure with newlines before and after
+            # This helps chapter_parser detect chapter headings
+            html = re.sub(r'<h[1-3][^>]*>', '\n\n', html, flags=re.IGNORECASE)
+            html = re.sub(r'</h[1-3]>', '\n\n', html, flags=re.IGNORECASE)
+
+            # Replace other block elements with single newlines
+            html = re.sub(r'<(p|div|br|h[4-6]|li|tr)[^>]*>', '\n', html, flags=re.IGNORECASE)
+            html = re.sub(r'</(p|div|h[4-6]|li|tr)>', '\n', html, flags=re.IGNORECASE)
 
             # Remove all remaining tags
             text = re.sub(r'<[^>]+>', '', html)
 
-            # Clean up whitespace
-            text = re.sub(r'\n\s*\n', '\n\n', text)
+            # Decode HTML entities
+            from html import unescape
+            text = unescape(text)
+
+            # Clean up whitespace - preserve paragraph breaks
+            text = re.sub(r'\n{3,}', '\n\n', text)  # Max 2 newlines
+            text = re.sub(r'[ \t]+', ' ', text)  # Collapse horizontal whitespace
+            text = re.sub(r' *\n *', '\n', text)  # Clean spaces around newlines
             text = text.strip()
 
             logger.info(f"[EXTRACT] Extracted {len(text)} chars from HTML")
@@ -292,28 +302,59 @@ def extract_text_from_file(file_content: bytes, source_path: str) -> str:
             logger.error(f"[EXTRACT] HTML extraction failed: {e}")
             raise ValueError(f"Failed to extract text from HTML: {e}")
 
-    # EPUB files - basic extraction
+    # EPUB files - extraction with structure preservation
     elif ext == ".epub":
         try:
             import zipfile
             import re
+            from html import unescape
 
             logger.info("[EXTRACT] Extracting text from EPUB file")
             text_parts = []
 
             with zipfile.ZipFile(io.BytesIO(file_content)) as zf:
-                for name in zf.namelist():
-                    if name.endswith(('.xhtml', '.html', '.htm')):
-                        with zf.open(name) as f:
-                            html = f.read().decode("utf-8", errors="ignore")
-                            # Strip HTML tags
-                            text = re.sub(r'<[^>]+>', '', html)
-                            text = re.sub(r'\s+', ' ', text).strip()
-                            if text:
-                                text_parts.append(text)
+                # Sort files to maintain reading order (some EPUBs have numbered files)
+                html_files = sorted([
+                    name for name in zf.namelist()
+                    if name.endswith(('.xhtml', '.html', '.htm'))
+                    and not name.startswith('__MACOSX')  # Skip Mac metadata
+                    and 'nav' not in name.lower()  # Skip navigation files
+                    and 'toc' not in name.lower()  # Skip table of contents
+                ])
+
+                for name in html_files:
+                    with zf.open(name) as f:
+                        html = f.read().decode("utf-8", errors="ignore")
+
+                        # Remove script and style elements
+                        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+                        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+
+                        # Preserve heading structure
+                        html = re.sub(r'<h[1-3][^>]*>', '\n\n', html, flags=re.IGNORECASE)
+                        html = re.sub(r'</h[1-3]>', '\n\n', html, flags=re.IGNORECASE)
+
+                        # Replace block elements with newlines
+                        html = re.sub(r'<(p|div|br)[^>]*>', '\n', html, flags=re.IGNORECASE)
+                        html = re.sub(r'</(p|div)>', '\n', html, flags=re.IGNORECASE)
+
+                        # Strip remaining HTML tags
+                        text = re.sub(r'<[^>]+>', '', html)
+
+                        # Decode HTML entities
+                        text = unescape(text)
+
+                        # Clean whitespace
+                        text = re.sub(r'\n{3,}', '\n\n', text)
+                        text = re.sub(r'[ \t]+', ' ', text)
+                        text = text.strip()
+
+                        if text and len(text) > 50:  # Skip very short files (likely metadata)
+                            text_parts.append(text)
+                            logger.debug(f"[EXTRACT] EPUB chapter: {name} ({len(text)} chars)")
 
             text = "\n\n".join(text_parts)
-            logger.info(f"[EXTRACT] Extracted {len(text)} chars from EPUB")
+            logger.info(f"[EXTRACT] Extracted {len(text)} chars from EPUB ({len(text_parts)} sections)")
             return text
 
         except Exception as e:

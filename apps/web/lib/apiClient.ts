@@ -503,7 +503,7 @@ export interface Chapter {
   word_count: number
   estimated_duration_seconds: number
   status: 'pending_review' | 'approved' | 'excluded' | 'processing' | 'completed' | 'failed'
-  segment_type: 'opening_credits' | 'front_matter' | 'body_chapter' | 'back_matter' | 'closing_credits' | 'retail_sample'
+  segment_type: 'opening_credits' | 'front_matter' | 'body_chapter' | 'back_matter' | 'bonus_chapter' | 'teaser_chapter' | 'closing_credits' | 'retail_sample'
   audio_path?: string
   audio_duration_seconds?: number
   audio_file_size_bytes?: number
@@ -517,7 +517,7 @@ export interface Chapter {
 export interface ChapterUpdatePayload {
   title?: string
   status?: 'pending_review' | 'approved' | 'excluded'
-  segment_type?: 'front_matter' | 'body_chapter' | 'back_matter'
+  segment_type?: 'front_matter' | 'body_chapter' | 'back_matter' | 'bonus_chapter' | 'teaser_chapter'
 }
 
 /**
