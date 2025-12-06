@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { GlassCard, PrimaryButton } from '@/components/ui'
@@ -11,7 +11,7 @@ import { createClient } from '@/lib/supabaseClient'
  * Billing Success Page - AuthorFlow Studios
  * Shown after successful Stripe Checkout
  */
-export default function BillingSuccessPage() {
+function BillingSuccessContent() {
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('session_id')
 
@@ -104,5 +104,24 @@ export default function BillingSuccessPage() {
         </GlassCard>
       </div>
     </div>
+  )
+}
+
+export default function BillingSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
+          <GlassCard className="text-center">
+            <div className="py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-af-purple mx-auto mb-4"></div>
+              <p className="text-white/60">Loading...</p>
+            </div>
+          </GlassCard>
+        </div>
+      </div>
+    }>
+      <BillingSuccessContent />
+    </Suspense>
   )
 }

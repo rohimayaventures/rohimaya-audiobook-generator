@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 /**
- * Next.js Middleware - AuthorFlow Studios
+ * Next.js Proxy - AuthorFlow Studios
  *
  * Handles:
  * - Session refresh on each request
@@ -26,7 +26,7 @@ const authRoutes = ['/login', '/signup']
 // Session timeout in milliseconds (30 minutes of inactivity)
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,

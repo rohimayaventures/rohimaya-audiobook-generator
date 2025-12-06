@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { GlassCard } from '@/components/ui'
@@ -11,7 +11,7 @@ import { signIn, signInWithMagicLink, signInWithOAuth, OAuthProvider } from '@/l
  * Login Page - AuthorFlow Studios
  * Email/password login with optional magic link
  */
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
@@ -233,5 +233,32 @@ export default function LoginPage() {
         </GlassCard>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <Link href="/" className="inline-block">
+              <span className="font-serif text-3xl font-bold text-gradient">
+                AuthorFlow
+              </span>
+            </Link>
+            <p className="text-white/60 mt-2">Welcome back</p>
+          </div>
+          <GlassCard>
+            <div className="py-12 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-af-purple mx-auto mb-4"></div>
+              <p className="text-white/60">Loading...</p>
+            </div>
+          </GlassCard>
+        </div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }

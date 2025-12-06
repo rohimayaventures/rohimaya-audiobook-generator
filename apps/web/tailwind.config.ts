@@ -10,6 +10,7 @@ const config: Config = {
       colors: {
         // AuthorFlow Studios - Midnight Indigo Glow theme
         'af-midnight': '#0a0a1a',
+        'af-dark': '#0f0a1f',
         'af-ink': '#12122a',
         'af-purple': '#7c3aed',
         'af-purple-soft': '#a78bfa',
