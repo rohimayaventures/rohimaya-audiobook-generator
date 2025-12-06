@@ -55,12 +55,15 @@ if env_path.exists():
 ADMIN_EMAILS = [email.strip().lower() for email in os.getenv("ADMIN_EMAILS", "").split(",") if email.strip()]
 
 # Initialize FastAPI app
+# Disable API docs in production for security
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development") == "production"
+
 app = FastAPI(
     title="AuthorFlow Studios API",
     description="Production API for generating studio-quality audiobooks from manuscripts",
     version="0.2.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
 )
 
 # CORS Configuration
@@ -70,8 +73,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
 )
 
 # Rate Limiting - add limiter to app state and exception handler

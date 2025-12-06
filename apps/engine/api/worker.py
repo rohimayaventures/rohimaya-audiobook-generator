@@ -113,8 +113,19 @@ def extract_text_from_file(file_content: bytes, source_path: str) -> str:
 
     # Determine file extension from source path
     ext = Path(source_path).suffix.lower() if source_path else ""
+    file_size = len(file_content)
 
-    logger.info(f"[EXTRACT] Extracting text from file with extension: {ext}")
+    logger.info(f"[EXTRACT] Extracting text from file with extension: {ext}, size: {file_size} bytes")
+
+    # Security: File size limit (50MB max)
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+    if file_size > MAX_FILE_SIZE:
+        raise ValueError(f"File too large: {file_size / 1024 / 1024:.1f}MB (max 50MB)")
+
+    # Security: Validate file extension
+    ALLOWED_EXTENSIONS = {".txt", ".md", ".markdown", ".text", ".docx", ".pdf", ".html", ".htm", ".epub"}
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Unsupported file type: {ext}")
 
     # Plain text formats - just decode
     if ext in (".txt", ".md", ".markdown", ".text"):
@@ -138,7 +149,7 @@ def extract_text_from_file(file_content: bytes, source_path: str) -> str:
     elif ext == ".docx":
         try:
             import zipfile
-            import xml.etree.ElementTree as ET
+            import defusedxml.ElementTree as ET
 
             logger.info("[EXTRACT] Extracting text from DOCX file (preserving original headings)")
             text_parts = []
